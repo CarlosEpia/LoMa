@@ -622,7 +622,7 @@ def create_household_dist(path_to_MV_district):
     output_path = 'data/data_bundle/household_dist_df.csv'
     
     if os.path.exists(output_path):
-        print(f"File already exists at {output_path}. Loading existing file.")
+        print(f"Household_distribution-File already exists at {output_path}. Loading existing file.")
         final_df = pd.read_csv(output_path)
         return final_df
 

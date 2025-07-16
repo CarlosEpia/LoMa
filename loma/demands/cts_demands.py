@@ -3,13 +3,13 @@ import geopandas as gpd
 import ast
 import pypsa
 import math
-
+import numpy as np
 from shapely.geometry import Point
 
 
 def load_cts_demand_per_building(shape):
     shape.to_crs(3035, inplace=True)
-    building_share = gpd.read_file("data_bundle/building_share", mask=shape)
+    building_share = gpd.read_file("data/data_bundle/building_share", mask=shape)
     building_share.rename(
         columns={
             "zensus_id": "zensus_id",
@@ -21,7 +21,7 @@ def load_cts_demand_per_building(shape):
     )
     building_share["p_set"] = [[0] * 8760 for _ in range(len(building_share))]
     cts_bus = pd.read_csv(
-        "databundle/cts_bus.csv",
+        "data/data_bundle/cts_bus.csv",
         index_col="bus_id",
     )
     cts_bus = cts_bus[cts_bus.index.isin(building_share["bus_id"])].squeeze()
@@ -51,22 +51,23 @@ def assign_cts_demand_to_buses(network, cts_demands):
     )
 
     ######## ONLY FOR VALIDATION PURPOSES ###############
+    '''
     cts_demands[["geom", "Bus", "distance"]].to_file(
         "validation/cts_demands.shp"
     )
     buses.to_file("validation/buses.shp")
+    '''
     #####################################################
 
     # insert data into network tables
-    index_numbers = network.loads.index.str.extract(r'(\d+)').astype(int)
-    next_load_id = index_numbers.max()
-    if math.isnan(next_load_id):
-        next_load_id = 0
-
-    cts_demands = cts_demands[["Bus", "p_set"]]
-    cts_demands["carrier"] = "CTS"
+    cts_demands = cts_demands[["Bus", "p_set"]]    
     cts_demands.rename(columns={"Bus": "bus"}, inplace=True)
-    cts_demands["Load"] = ['Load_'+ i for i in range(next_load_id, next_load_id+ len(cts_demands))]
+    import pdb; pdb.set_trace()
+    cts_demands = cts_demands.groupby("bus").agg({
+        "p_set": lambda series: list(np.sum(series.to_list(), axis=0))
+    }).reset_index()
+    cts_demands["Load"] = cts_demands["bus"].apply(lambda b: f"CTS_Load_{b}")
+    cts_demands["carrier"] = "CTS"
     cts_demands.set_index("Load", drop=True, inplace=True)
 
     network.loads = pd.concat([network.loads, cts_demands[["bus", "carrier"]]])

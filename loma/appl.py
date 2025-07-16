@@ -11,13 +11,10 @@ from demands.create_household_distribution import create_household_dist
 from demands.import_household_demand import distribute_household_demand
 from demands.cts_demands import inser_cts_demand_per_building
 
-
-
 args = {
-        "path_to_shapefiles_grid": 'data/Input_files/Filtered_data_Kronenburg',  # define path of shapefiles for grid infrastructure (related to execution folder)
+        "path_to_shapefiles_grid": 'data/Input_files/Filtered_data_Kronenburg_V2',  # define path of shapefiles for grid infrastructure (related to execution folder)
         "path_to_shapefile_MV_grid": 'data/Input_files/MV_grid_district/husum_district.shp',  #define path of shapefiles for boundaries of husum_district 
-        "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany"
-        
+        "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany"     
         }
 
 
