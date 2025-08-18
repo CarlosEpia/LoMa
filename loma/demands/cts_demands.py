@@ -62,7 +62,6 @@ def assign_cts_demand_to_buses(network, cts_demands):
     # insert data into network tables
     cts_demands = cts_demands[["Bus", "p_set"]]    
     cts_demands.rename(columns={"Bus": "bus"}, inplace=True)
-    import pdb; pdb.set_trace()
     cts_demands = cts_demands.groupby("bus").agg({
         "p_set": lambda series: list(np.sum(series.to_list(), axis=0))
     }).reset_index()

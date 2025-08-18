@@ -22,7 +22,7 @@ import pypsa
 from collections import defaultdict
 from shapely.strtree import STRtree
 
-
+from demands.household_count import count_households_per_bus
 
 
 
@@ -229,6 +229,12 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
     #snapped_joint_buses.to_file('/home/student/Documents/LoMa/Code/test_updated_buses.shp')
     
     return buses_updated
+
+
+
+##### Implemenent amount of households for each bus
+
+
 
 
 
@@ -499,6 +505,7 @@ def import_grid_infrastructure(n, buses, lines):
           x=row.geometry.x,
           y=row.geometry.y)
         n.buses.at[row["bus_id"], 'comp_type'] = row['comp_type']
+        n.buses.at[row["bus_id"], 'house_count'] = row['house_count']
         n.buses.at[row["bus_id"], 'geom'] = row['geometry']
         
     # import LV lines
@@ -609,13 +616,14 @@ def import_ev_chargers(n):
 
 
 
-def create_pypsa_network(shape_files_folder):
+def create_pypsa_network(shape_files_folder, q_households_folder):
     n = pypsa.Network()
     time_index = pd.date_range('2023-01-01', periods=8760, freq='h')
     n.snapshots = time_index
     
     buses, lines = create_gdf_from_shape(shape_files_folder)
     buses = snap_joint_buses_to_lines(lines, buses)
+    buses = count_households_per_bus(buses, q_households_folder)
    
     #final_load_buses = map_load_bus_to_network_bus(buses, lines)
     #network_buses = buses[buses.comp_type.isin(['trafo', 'distributor'])]
@@ -624,7 +632,7 @@ def create_pypsa_network(shape_files_folder):
     #merged_lines = merge_unconnected_lines(split_lines, buses)
     import_grid_infrastructure(n, buses, split_lines) 
     fix_grid_infrastructure(n)
-    n = open_LV_circle(n, 'line_128')
+    n = open_LV_circle(n, 'line_187')
     
     return n
     
