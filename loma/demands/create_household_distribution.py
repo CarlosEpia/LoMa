@@ -93,7 +93,7 @@ def download_and_check(url, target_file, max_iteration=5):
                 ) from ex
                 
 def read_csv_from_zip(zip_path, csv_filename_in_zip):
-    """Read CSV from inside ZIP, create geometry from x/y columns, and reproject to EPSG:4326."""
+    """Read CSV from inside ZIP, create geometry from x/y columns."""
     
     with zipfile.ZipFile(zip_path, 'r') as z:
         with z.open(csv_filename_in_zip) as f:
@@ -131,7 +131,7 @@ def create_geometry_for_census_cells(df, path_sh_shape, path_nuts3_shape):
     )
 
     # Transform to WGS84 for compatibility with most shapefiles
-    gdf = gdf.to_crs("EPSG:4326")
+    gdf = gdf.to_crs("EPSG:32632")
 
     # Load SH region boundary and reduce to a single geometry
     sh_geometry = gpd.read_file(path_sh_shape)

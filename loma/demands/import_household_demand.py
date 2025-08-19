@@ -12,9 +12,6 @@ import numpy as np
 import geopandas as gpd
 from shapely.geometry import Point
 
-# ToDo: change path to data_bundle, if the file is part of it 
-folderpath = '/home/student/airflow_exe2/data_bundle_egon_data/household_electricity_demand_profiles/hh_el_load_profiles_100k.hdf'
-
 
 def create_profile_pool_from_df(profil_type, profiles_df, limit=1):
     """
@@ -37,7 +34,7 @@ def distribute_household_demand(n, profile_dist):
     
     """
     # Load profile pool from HDF file
-    pool = pd.read_hdf(folderpath)
+    pool = pd.read_hdf('data/data_bundle/hh_el_load_profiles_100k.hdf')
 
     # Ensure profile_dist is a GeoDataFrame
     if not isinstance(profile_dist, gpd.GeoDataFrame):
@@ -94,27 +91,7 @@ def distribute_household_demand(n, profile_dist):
 
     return n
 
-'''
-        profil_type = np.random.choice(profil_types, p=percentage)
 
-        profile = create_profile_pool_from_df(profil_type, pool, limit=1)
-        time_index = pd.date_range('2023-01-01', periods=8760, freq='h')
-        profile_series = pd.Series(profile.values, index=time_index)
-        profile_series_mwh = profile_series / 1e6
-        
-        load_name = 'HH_Load_'+bus_name
-        n.add("Load", load_name, bus=bus_name, carrier='household', p_set=0)
-        
-        if n.loads_t.p_set.empty:
-            n.loads_t.p_set = pd.DataFrame(index=time_index)
-    
-        n.loads_t.p_set[load_name] = profile_series_mwh
-        
-    return n
-'''
-
-#toDo: use excel file from husum for household_data for defining the amount of households
-    
 
 
 

@@ -40,7 +40,6 @@ def parse_bus_numbers(hn_entry):
     numbers = []
     
     for p in parts:
-        # Bereich mit Bindestrich
         if '-' in p:
             bounds = re.findall(r'\d+', p)
             if len(bounds) == 2:
@@ -55,7 +54,6 @@ def parse_bus_numbers(hn_entry):
 def count_households_per_bus(buses, path):
     #load and prepare data
     q_households = pd.read_csv(path)
-    #q_households = pd.read_csv('/home/student/Documents/LoMa/Weiter_Daten_Stadtwerke_Husum/quantity_household_fixed.csv')    #toDo change path to args
     buses = buses.rename(columns={'HAUSNUMMER': 'Hausnummer', 'LOKATION_S': 'Strasse'})
     buses['parsed_numbers'] = buses['Hausnummer'].apply(parse_bus_numbers)
     q_households[['Hausnummer_int', 'Hausnummer_letter']] = q_households['Hausnummer'].apply(lambda x: pd.Series(hausnummer_split(x)))

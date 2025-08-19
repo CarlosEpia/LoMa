@@ -26,8 +26,7 @@ from demands.household_count import count_households_per_bus
 
 
 
-shape_files_folder = '/home/student/Documents/LoMa/shape_files/Filtered_data_Kronenburg_V2/'
-input_folder = '/home/student/Documents/LoMa/shape_files/Filtered_data_Kronenburg_V2/'
+
 
 def create_gdf_from_shape(input_folder):
     """
@@ -48,9 +47,6 @@ def create_gdf_from_shape(input_folder):
     distributors = gpd.read_file(os.path.join(input_folder, "old_Kabelverteiler", "Gis ST Kabelverteiler Position.shp"))
     joints = gpd.read_file(os.path.join(input_folder, "Gis NSP Muffe Position.shp"))
     MVLV_trafos = gpd.read_file(os.path.join(input_folder, "Gis ST Station Position.shp"))
-    
-    print("................PATH..............")
-    print(os.path.join(input_folder, "Gis NSP Kabelabschnitt Verlauf.shp"))
 
     # component-type-column for distinguish the components
     LV_lines["comp_type"] = "lv_line"
@@ -73,7 +69,7 @@ def create_gdf_from_shape(input_folder):
     HA_Bus_clean = ensure_columns(HA_Bus, bus_columns)
     
     #secure same crs
-    target_crs = "EPSG:25832"
+    target_crs = "EPSG:32632"
     joints_clean = joints_clean.to_crs(target_crs)
     distributors_clean = distributors_clean.to_crs(target_crs)
     HA_Bus_clean = HA_Bus_clean.to_crs(target_crs)
@@ -151,7 +147,7 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
     split_lines = []
 
     for idx, row in lines.iterrows():
-        print(f"Spliting line {idx}")
+        #print(f"Spliting line {idx}")
         line_geom = row.geometry
 
         # filter relevant buses (just split at the joint-buses)
@@ -180,9 +176,6 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
     split_lines_gdf = gpd.GeoDataFrame(split_lines_df, geometry='geometry', crs=LV_lines.crs)
     lines = split_lines_gdf.reset_index(drop=True)
     lines['line_id'] = ['line_' + str(i) for i in range(len(lines))]
-    
-    # Optional: Export
-    lines.to_file('/home/student/Documents/LoMa/Code/test_splited_LV_line.shp')
 
     return lines
 
@@ -215,27 +208,15 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
         min_dist = bus.geometry.distance(nearest_geom)
         
         if 0 < min_dist <= tolerance :
-            print('lets_gooo', bus)
             projected_distance = nearest_geom.project(bus.geometry)
             snapped_point = nearest_geom.interpolate(projected_distance)
-            print(joint_buses.at[idx, 'geometry'])
+            print(f"{bus.bus_id} is projected to the corresponding line")
             joint_buses.at[idx, 'geometry'] = snapped_point
-            print(joint_buses.at[idx, 'geometry'])
             snapped_indices.append(idx)
             
     buses_updated = pd.concat([joint_buses, other_buses]).sort_index()   
     
-    # Optional: Export for checking
-    #snapped_joint_buses.to_file('/home/student/Documents/LoMa/Code/test_updated_buses.shp')
-    
     return buses_updated
-
-
-
-##### Implemenent amount of households for each bus
-
-
-
 
 
 #####house connection buses
@@ -527,14 +508,14 @@ def import_grid_infrastructure(n, buses, lines):
 
         # if closest bus not directly next to the start/endpoint connect trafo/distributor bus
         if 10 > dist0 > 0.1 and row['comp_type']=='lv_line':
-            print('##### line connecting to trafo/dist ############', 'Line:', idx)
+            #print('##### line connecting to trafo/dist ############', 'Line:', idx)
             traf_dist_buses = buses[buses.comp_type.isin(['distributor', 'trafo'])].reset_index(drop=True)
             traf_dist_coords = np.array([[geom.x, geom.y] for geom in traf_dist_buses.geometry])
             traf_dist_tree = cKDTree(traf_dist_coords)
             bus0, _ = get_nearest_bus(start_point, traf_dist_tree, traf_dist_buses)
     
         if 10 > dist1 > 0.1 and row['comp_type']=='lv_line':
-            print('##### line connecting to trafo/dist ############', 'Line:', idx)
+            #print('##### line connecting to trafo/dist ############', 'Line:', idx)
             traf_dist_buses = buses[buses.comp_type.isin(['distributor', 'trafo'])].reset_index(drop=True)
             traf_dist_coords = np.array([[geom.x, geom.y] for geom in traf_dist_buses.geometry])
             traf_dist_tree = cKDTree(traf_dist_coords)
@@ -542,7 +523,7 @@ def import_grid_infrastructure(n, buses, lines):
     
         length_km = line_geom.length / 1000
     
-        n.add("Line", row['line_id'], bus0=bus0, bus1=bus1,
+        n.add("Line", row['line_id'], bus0=bus0, bus1=bus1, carrier='AC',
               length=length_km, r=0.3, x=0.05, s_nom=100e6)
         n.lines.at[row["line_id"], 'comp_type'] = row['comp_type']
         n.lines.at[row["line_id"], 'geom'] = row['geometry']
@@ -565,9 +546,10 @@ def import_grid_infrastructure(n, buses, lines):
               marginal_cost=100)   
     
     
-    #optional export for validating infrasturcture
-    lines.to_file('/home/student/Documents/LoMa/Code/test_grid_lines.shp')
-    buses.to_file('/home/student/Documents/LoMa/Code/test_grid_buses.shp')
+    #add carriers
+    carriers = ["AC", "CTS", "industrial", "household"]
+    for c in carriers:
+        n.add("Carrier", c)
     
     
 

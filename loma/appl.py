@@ -10,6 +10,7 @@ from network.import_network_from_shape_files import create_pypsa_network
 from demands.create_household_distribution import create_household_dist
 from demands.import_household_demand import distribute_household_demand
 from demands.cts_demands import inser_cts_demand_per_building
+from demands.create_industrial_demand import insert_ind_demand_per_building
 
 args = {
         "path_to_shapefiles_grid": 'data/Input_files/Filtered_data_Kronenburg_V3',  # define path of shapefiles for grid infrastructure (related to execution folder)
@@ -24,6 +25,9 @@ n = create_pypsa_network(args['path_to_shapefiles_grid'], args['path_to_househol
 
 #insert cts demand
 n = inser_cts_demand_per_building(n, args['path_to_shapefile_MV_grid'])
+
+#insert industrial demands
+n = insert_ind_demand_per_building(n,  args['path_to_shapefile_MV_grid'], args['nuts3_focus_region'])
 
 #household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
 household_dist_df = create_household_dist(args['path_to_shapefile_MV_grid'])
