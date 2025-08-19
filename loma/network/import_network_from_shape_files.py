@@ -6,9 +6,7 @@ Created on Thu Jun 19 09:49:16 2025
 @author: student
 """
 
-#ToDo: Create function to add manual buses for certain lines and split lines there
-
-
+#ToDo: Create function to add manual buses for certain lines and split lines there 
 
 import geopandas as gpd
 import os
@@ -25,7 +23,10 @@ from shapely.strtree import STRtree
 from demands.household_count import count_households_per_bus
 
 
+input_folder='data/Input_files/Filtered_data_Kronenburg_V3'
 
+line_parameters = {
+    'NAYY 4x240': {}}
 
 
 def create_gdf_from_shape(input_folder):
@@ -161,6 +162,7 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
             split_lines.append({
                 'geometry': line_geom,
                 'comp_type': row.comp_type,
+                'KABELTYP': row.KABELTYP
             })
         else:
             snapped_points = list(near_joints.geometry)
@@ -170,6 +172,7 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
                 split_lines.append({
                     'geometry': segment,
                     'comp_type': row.comp_type,
+                    'KABELTYP': row.KABELTYP
                 })
 
     split_lines_df = pd.DataFrame(split_lines)
@@ -197,11 +200,7 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
     line_geometries = list(LV_lines.geometry)
     str_tree = STRtree(line_geometries)
     
-    # Optional: falls du Referenz zu originalem DataFrame brauchst
-  #  geom_to_line = {geom: line for geom, line in zip(line_geometries, lines.itertuples())}
-    
-    snapped_indices = []
-    
+    snapped_indices = [] 
     for idx, bus in joint_buses.iterrows():
         nearest_idx = str_tree.nearest(bus.geometry)
         nearest_geom = line_geometries[nearest_idx] 
@@ -459,7 +458,7 @@ def get_nearest_bus(point, bus_tree, buses_df):
 
 
 ###creating pypsa grid 
-def import_grid_infrastructure(n, buses, lines):
+def import_grid_infrastructure(n, buses, lines, cable_types):
     """    
     Based on exported shapefiles recreate the grid infrastructure as pysa_network
 
@@ -522,9 +521,22 @@ def import_grid_infrastructure(n, buses, lines):
             bus1, _ = get_nearest_bus(end_point, traf_dist_tree, traf_dist_buses)
     
         length_km = line_geom.length / 1000
+        cable_type = row['KABELTYP']
+        if cable_type in cable_types:
+           r = cable_types[cable_type]["R"] * length_km      # Ohm
+           x = cable_types[cable_type]["L"]/1000 * 50 * 2 * np.pi * length_km  # 2pi*frequenz #Ohm
+           s_nom  = cable_types[cable_type]["U"] * cable_types[cable_type]["I_max"] * np.sqrt(3)/1e6    # MW 
+           
+        else:
+           # ToDo: define reasonable default-values
+           r = 0.3
+           x = 0.05
+           s_nom = 100e6
+           
+        
     
         n.add("Line", row['line_id'], bus0=bus0, bus1=bus1, carrier='AC',
-              length=length_km, r=0.3, x=0.05, s_nom=100e6)
+              length=length_km, r=r, x=x, s_nom=s_nom)
         n.lines.at[row["line_id"], 'comp_type'] = row['comp_type']
         n.lines.at[row["line_id"], 'geom'] = row['geometry']
         lines.at[idx, 'bus_0'] = bus0
@@ -534,6 +546,7 @@ def import_grid_infrastructure(n, buses, lines):
         lines.at[idx, 'bus_0'] = bus0
         lines.at[idx, 'bus_1'] = bus1
         lines.at[idx, 'line_id'] = row['line_id']
+    
     
     
     #add generator at trafo
@@ -598,7 +611,7 @@ def import_ev_chargers(n):
 
 
 
-def create_pypsa_network(shape_files_folder, q_households_folder):
+def create_pypsa_network(shape_files_folder, q_households_folder, cable_types):
     n = pypsa.Network()
     time_index = pd.date_range('2023-01-01', periods=8760, freq='h')
     n.snapshots = time_index
@@ -612,7 +625,7 @@ def create_pypsa_network(shape_files_folder, q_households_folder):
     #all_network_buses = pd.concat([final_load_buses, network_buses])
     split_lines = split_lines_on_joints(lines, buses)
     #merged_lines = merge_unconnected_lines(split_lines, buses)
-    import_grid_infrastructure(n, buses, split_lines) 
+    import_grid_infrastructure(n, buses, split_lines, cable_types) 
     fix_grid_infrastructure(n)
     n = open_LV_circle(n, 'line_187')
     

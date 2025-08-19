@@ -17,11 +17,16 @@ args = {
         "path_to_shapefile_MV_grid": 'data/Input_files/MV_grid_district/husum_district.shp',  #define path of shapefiles for boundaries of husum_district 
         "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",  
         "path_to_household_data": "data/Input_files/quantity_household_fixed.csv",
+        "Kabeltypen": {
+            "NAYY 4x240": {"U": 400, "I_max": 364, "R": 0.125, "L": 0.254},     #values based on FaberKabel Starkstromkabel NAYY-J/-O nach VDE 0276-603 (same as dingO-grid-values)
+            "NAYY 4x150": {"U": 400, "I_max": 275, "R": 0.206, "L": 0.256},     # U[v], I[A], R[Ohm/km], L[mH/km]
+            "NAYY 4x95": {"U": 400, "I_max": 215, "R": 0.206, "L": 0.261},
+            "NAYY 4x35": {"U": 400, "I_max": 123, "R": 0.868, "L": 0.271}
+                    }
         }
 
-
 #create pypsa network with grid topology shapefilees
-n = create_pypsa_network(args['path_to_shapefiles_grid'], args['path_to_household_data'])
+n = create_pypsa_network(args['path_to_shapefiles_grid'], args['path_to_household_data'], args['Kabeltypen'])
 
 #insert cts demand
 n = inser_cts_demand_per_building(n, args['path_to_shapefile_MV_grid'])
