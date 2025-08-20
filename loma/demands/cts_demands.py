@@ -1,15 +1,13 @@
 import pandas as pd
 import geopandas as gpd
 import ast
-import pypsa
-import math
-import numpy as np
-from shapely.geometry import Point
 
 
 def load_cts_demand_per_building(shape):
     shape.to_crs(3035, inplace=True)
-    building_share = gpd.read_file("data/data_bundle/building_share", mask=shape)
+    building_share = gpd.read_file(
+        "data/data_bundle/building_share", mask=shape
+    )
     building_share.rename(
         columns={
             "zensus_id": "zensus_id",
@@ -36,52 +34,55 @@ def load_cts_demand_per_building(shape):
 def assign_cts_demand_to_buses(network, cts_demands):
     buses = network.buses.copy()
     buses = buses[buses["comp_type"] == "house_connection"]
-
-    ########## Temporal ########
-    buses["x"] = buses["x"].apply(float)
-    buses["y"] = buses["y"].apply(float)
-    buses["geom"] = buses.apply(lambda x: Point(x.x, x.y), axis=1)
-    buses = gpd.GeoDataFrame(buses, geometry="geom", crs="EPSG:25832")
-    buses.to_crs(3035, inplace=True)
-    ############################
+    buses = gpd.GeoDataFrame(buses, geometry="geom", crs=32632)
 
     cts_demands = gpd.GeoDataFrame(cts_demands, geometry="geom")
+    cts_demands.to_crs(crs=32632, inplace=True)
     cts_demands = gpd.sjoin_nearest(
         cts_demands, buses, "left", distance_col="distance"
     )
+    cts_demands = cts_demands[cts_demands["distance"] < 1000]
 
-    ######## ONLY FOR VALIDATION PURPOSES ###############
-    '''
-    cts_demands[["geom", "Bus", "distance"]].to_file(
-        "validation/cts_demands.shp"
-    )
-    buses.to_file("validation/buses.shp")
-    '''
-    #####################################################
+    # ######## ONLY FOR VALIDATION PURPOSES ###############
+
+    # cts_demands[["geom", "Bus", "distance"]].to_file(
+    #     "/home/carlos/LoMa/validation/cts_demands.shp"
+    # )
+    # buses.to_file("/home/carlos/LoMa/validation/buses.shp")
+
+    # #####################################################
 
     # insert data into network tables
-    cts_demands = cts_demands[["Bus", "p_set"]]    
     cts_demands.rename(columns={"Bus": "bus"}, inplace=True)
-    cts_demands = cts_demands.groupby("bus").agg({
-        "p_set": lambda series: list(np.sum(series.to_list(), axis=0))
-    }).reset_index()
-    cts_demands["Load"] = cts_demands["bus"].apply(lambda b: f"CTS_Load_{b}")
-    cts_demands["carrier"] = "CTS"
+    cts_demands["Load"] = cts_demands.apply(
+        lambda b: f"CTS_Load_{b.name}_{b.bus}", axis=1
+    )
     cts_demands.set_index("Load", drop=True, inplace=True)
 
-    network.loads = pd.concat([network.loads, cts_demands[["bus", "carrier"]]])
-    for l in cts_demands.index:
-        network.loads_t.p_set[l] = cts_demands.at[l, "p_set"]
+    cts_demands_t = cts_demands["p_set"].copy()
+
+    cts_demands["carrier"] = "AC"
+    cts_demands["sign"] = -1
+    cts_demands["q_set"] = 0
+    cts_demands["p_set"] = 0
+    cts_demands["active"] = True
+
+    network.loads = pd.concat(
+        [
+            network.loads,
+            cts_demands[
+                ["bus", "carrier", "type", "p_set", "q_set", "sign", "active"]
+            ],
+        ]
+    )
+    for l in cts_demands_t.index:
+        network.loads_t.p_set[l] = cts_demands_t[l]
 
     return network
 
 
 def inser_cts_demand_per_building(network, shape_path):
-    ######## DELETE AFTER INTEGRACION ##########################
-    # network = pypsa.Network(
-    #     import_name="/home/carlos/Documents/LoMa/databundle/test_network"
-    # )
-    ############################################################
+    # breakpoint()
     shape = gpd.read_file(shape_path)
     cts_demands = load_cts_demand_per_building(shape)
     network = assign_cts_demand_to_buses(network, cts_demands)
