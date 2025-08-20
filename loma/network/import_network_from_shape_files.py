@@ -179,6 +179,9 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
     split_lines_gdf = gpd.GeoDataFrame(split_lines_df, geometry='geometry', crs=LV_lines.crs)
     lines = split_lines_gdf.reset_index(drop=True)
     lines['line_id'] = ['line_' + str(i) for i in range(len(lines))]
+    
+    # # Optional: Export
+    # lines.to_file('/home/student/Documents/LoMa/Code/test_splited_LV_line.shp')
 
     return lines
 
@@ -563,6 +566,10 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
     carriers = ["AC", "CTS", "industrial", "household"]
     for c in carriers:
         n.add("Carrier", c)
+
+    # #optional export for validating infrasturcture
+    # lines.to_file('/home/student/Documents/LoMa/Code/test_grid_lines.shp')
+    # buses.to_file('/home/student/Documents/LoMa/Code/test_grid_buses.shp')
     
     
 
