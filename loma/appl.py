@@ -11,6 +11,7 @@ from demands.create_industrial_demand import insert_ind_demand_per_building
 from demands.cts_demands import inser_cts_demand_per_building
 from demands.import_household_demand import distribute_household_demand
 from network.import_network_from_shape_files import create_pypsa_network
+from demands.import_EV_demand import import_EV_loads
 
 args = {
         "path_to_shapefiles_grid": 'data/Input_files/Filtered_data_Kronenburg_V3',  # define path of shapefiles for grid infrastructure (related to execution folder)
@@ -39,4 +40,7 @@ household_dist_df = create_household_dist(args['path_to_shapefile_MV_grid'])
 
 #allocate profiles to buses
 n = distribute_household_demand(n, household_dist_df)
+
+#insert EV_loads
+n = import_EV_loads(n, args['path_to_shapefiles_grid'])
 

@@ -21,10 +21,6 @@ from shapely.geometry import GeometryCollection, LineString, MultiPoint, Point
 from shapely.ops import linemerge, snap, split, unary_union
 from shapely.strtree import STRtree
 
-input_folder='data/Input_files/Filtered_data_Kronenburg_V3'
-
-line_parameters = {
-    'NAYY 4x240': {}}
 
 
 def create_gdf_from_shape(input_folder):
