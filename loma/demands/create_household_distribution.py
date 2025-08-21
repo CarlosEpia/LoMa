@@ -7,15 +7,13 @@ Created on Tue Jun 24 07:53:13 2025
 """
 
 import os
-from urllib.request import urlretrieve
 import zipfile
-import pandas as pd
+from urllib.request import urlretrieve
+
 import geopandas as gpd
-from shapely.geometry import Point
 import numpy as np
-import psycopg2
-import re
-   
+import pandas as pd
+
 #define folder for downloading census_data
 target_file_household_type = "data/data_bundle/census_22_householdtyp_100m.zip"   
 target_file_population = "data/data_bundle/census_22_population.zip"

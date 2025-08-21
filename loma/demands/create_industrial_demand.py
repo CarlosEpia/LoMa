@@ -6,16 +6,13 @@ Created on Tue Jul  8 14:23:23 2025
 @author: student
 """
 
-import osmnx as ox
 import geopandas as gpd
-from sqlalchemy import create_engine
-from geoalchemy2.types import Geometry
+import osmnx as ox
 import pandas as pd
-import numpy as np
 
 
 def download_osm_industrial_areas(region_nuts3):
-    
+
     tags = {"landuse": "industrial"}
     
     # extract data

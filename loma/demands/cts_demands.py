@@ -1,6 +1,7 @@
-import pandas as pd
-import geopandas as gpd
 import ast
+
+import geopandas as gpd
+import pandas as pd
 
 
 def load_cts_demand_per_building(shape):

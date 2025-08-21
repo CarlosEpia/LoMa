@@ -6,11 +6,11 @@ Created on Thu Jun 19 15:11:55 2025
 @author: student
 """
 
-from network.import_network_from_shape_files import create_pypsa_network
 from demands.create_household_distribution import create_household_dist
-from demands.import_household_demand import distribute_household_demand
-from demands.cts_demands import inser_cts_demand_per_building
 from demands.create_industrial_demand import insert_ind_demand_per_building
+from demands.cts_demands import inser_cts_demand_per_building
+from demands.import_household_demand import distribute_household_demand
+from network.import_network_from_shape_files import create_pypsa_network
 
 args = {
         "path_to_shapefiles_grid": 'data/Input_files/Filtered_data_Kronenburg_V3',  # define path of shapefiles for grid infrastructure (related to execution folder)

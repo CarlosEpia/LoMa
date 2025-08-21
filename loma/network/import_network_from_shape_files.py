@@ -8,20 +8,18 @@ Created on Thu Jun 19 09:49:16 2025
 
 #ToDo: Create function to add manual buses for certain lines and split lines there 
 
-import geopandas as gpd
 import os
-from shapely.ops import split
-from shapely.geometry import MultiPoint, Point, LineString, GeometryCollection
-from shapely.ops import split, linemerge, unary_union, snap
-import pandas as pd
-import numpy as np
-from scipy.spatial import cKDTree
-import pypsa
 from collections import defaultdict
-from shapely.strtree import STRtree
 
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import pypsa
 from demands.household_count import count_households_per_bus
-
+from scipy.spatial import cKDTree
+from shapely.geometry import GeometryCollection, LineString, MultiPoint, Point
+from shapely.ops import linemerge, snap, split, unary_union
+from shapely.strtree import STRtree
 
 input_folder='data/Input_files/Filtered_data_Kronenburg_V3'
 

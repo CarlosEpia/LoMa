@@ -5,10 +5,12 @@ Created on Fri Aug 15 09:10:51 2025
 
 @author: student
 """
+import re
+
+import geopandas as gpd
 #### manual household count based on inout file
 import pandas as pd
-import geopandas as gpd
-import re
+
 
 def hausnummer_split(hn):
     """

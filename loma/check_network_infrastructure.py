@@ -8,8 +8,6 @@ Created on Wed Jul 16 07:43:07 2025
 
 import networkx as nx
 
-
-
 ##### network connected consistently???
 # Erzeuge den Graph des Stromnetzes
 G = n.graph()
