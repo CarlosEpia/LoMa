@@ -32,7 +32,7 @@ args = {
 n = create_pypsa_network(args['path_to_shapefiles_grid'], args['path_to_household_data'], args['path_to_heat_pump_data'], args['Kabeltypen'])
 
 #insert cts demand
-n = inser_cts_demand_per_building(n, args['path_to_shapefile_MV_grid'])
+#n = inser_cts_demand_per_building(n, args['path_to_shapefile_MV_grid'])
 
 #insert industrial demands
 n = insert_ind_demand_per_building(n,  args['path_to_shapefile_MV_grid'], args['nuts3_focus_region'])
@@ -44,8 +44,12 @@ household_dist_df = create_household_dist(args['path_to_shapefile_MV_grid'])
 n = distribute_household_demand(n, household_dist_df)
 
 #insert_heat_loas_for_heat_pump_location
-n = add_heat_loads_to_network(n)
+#n = add_heat_loads_to_network(n)
 
 #insert EV_loads
 n = import_EV_loads(n, args['path_to_shapefiles_grid'])
+
+
+#Optimize
+n.optimize(snapshots=n.snapshots[:24], solver_name='glpk')
 

@@ -167,7 +167,7 @@ def insert_ind_demand_per_building(n, path_to_MV_district, region_nuts3):
                 "Load",
                 name=load_name,
                 bus=chosen_bus,
-                carrier="industrial",
+                carrier="AC",
                 p_set=0.0
             )
             n.loads_t.p_set[load_name] = pd.Series(ts, index=n.snapshots)

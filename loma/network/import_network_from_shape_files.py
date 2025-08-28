@@ -559,7 +559,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
     
     
     #add carriers
-    carriers = ["AC", "CTS", "industrial", "household"]
+    carriers = ["AC", "land_transport_EV"]
     for c in carriers:
         n.add("Carrier", c)
 

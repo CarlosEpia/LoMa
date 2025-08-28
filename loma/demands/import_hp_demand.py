@@ -174,7 +174,7 @@ def add_heat_loads_to_network(n):
         n.add("Load",
               name=f"heat_load_{bus_idx}",
               bus=bus_idx,
-              carrier="heat",
+              carrier="AC",
               p_set=load_profiles[bus_idx])
     
     return n

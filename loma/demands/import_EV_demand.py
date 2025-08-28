@@ -39,7 +39,7 @@ def import_EV_loads(n, input_folder):
               load_name,
               bus=bus_name,
               p_set=0,       
-              carrier="EV")
+              carrier="land_transport_EV")
         
     return n
 
