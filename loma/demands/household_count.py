@@ -28,6 +28,50 @@ def hausnummer_split(hn):
         return num, letter
     return None, None
 
+
+def parse_bus_numbers(hn_entry):
+    """
+    Wandelt komplexe Hausnummern-Einträge in eine Liste von (nummer, letter)-Tupeln um.
+    Beispiele:
+    '14, 14a, 14b' -> [(14,''), (14,'a'), (14,'b')]
+    '39-43' -> [(39,''), (41,''), (43,'')]
+    '21-21a' -> [(21,''), (21,'a')]
+    """
+    if not hn_entry or pd.isna(hn_entry):
+        return []
+    
+    parts = [p.strip() for p in str(hn_entry).split(',')]
+    numbers = []
+    
+    for p in parts:
+        if '-' in p:
+            left, right = [s.strip() for s in p.split('-', 1)]
+            left_num, left_letter = hausnummer_split(left)
+            right_num, right_letter = hausnummer_split(right)
+
+            # case 1: both sides are just numbers
+            if left_num and right_num and left_letter == '' and right_letter == '':
+                step = 2 
+                for num in range(left_num, right_num + 1, step):
+                    numbers.append((num, ''))
+            
+            # case 2: right side is combination of numbers and letters
+            elif left_num == right_num and right_letter != '':
+                numbers.append((left_num, ''))
+                numbers.append((right_num, right_letter))
+            
+            else:
+                # fallback
+                if left_num: numbers.append((left_num, left_letter))
+                if right_num: numbers.append((right_num, right_letter))
+        
+        else:
+            # just single number
+            numbers.append(hausnummer_split(p))
+    
+    return numbers
+
+'''
 def parse_bus_numbers(hn_entry):
     """
     Transfer special housenumber entries into a list of numbers/letters-tuples
@@ -52,6 +96,9 @@ def parse_bus_numbers(hn_entry):
         else:
             numbers.append(hausnummer_split(p))
     return numbers
+
+'''
+
 
 def count_households_per_bus(buses, path):
     #load and prepare data
