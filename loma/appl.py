@@ -13,6 +13,9 @@ from demands.import_household_demand import distribute_household_demand
 from network.import_network_from_shape_files import create_pypsa_network
 from demands.import_EV_demand import import_EV_loads
 from demands.import_hp_demand import add_heat_loads_to_network
+from network.flexibilities_14a_heat_pump import insert_heat_pump_flexibilities_14a
+
+
 
 args = {
         "path_to_shapefiles_grid": 'data/Input_files/Filtered_data_Kronenburg_V3',  # define path of shapefiles for grid infrastructure (related to execution folder)
@@ -48,6 +51,9 @@ n = add_heat_loads_to_network(n)
 
 #insert EV_loads
 n = import_EV_loads(n, args['path_to_shapefiles_grid'])
+
+#insert heat pump flexibilities
+n = insert_heat_pump_flexibilities_14a(n)
 
 
 #Optimize
