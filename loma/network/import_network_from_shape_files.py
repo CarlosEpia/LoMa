@@ -53,7 +53,8 @@ def create_gdf_from_shape(input_folder):
     HA_Bus["comp_type"] = "house_connection"
     
     ##buses
-    bus_columns= ['comp_type', 'LOKATION_S', 'HAUSNUMMER', 'geometry']
+    bus_columns = ['comp_type', 'LOKATION_S', 'HAUSNUMMER', 'geometry']
+    trafo_columns = ['comp_type', 'LOKATION_S', 'HAUSNUMMER', 'TRAFOBELAS', 'geometry']
     def ensure_columns(df, columns):
         for col in columns:
             if col not in df.columns:
@@ -61,7 +62,7 @@ def create_gdf_from_shape(input_folder):
         return df[columns]
     joints_clean = ensure_columns(joints, bus_columns)
     distributors_clean = ensure_columns(distributors, bus_columns)
-    MVLV_trafos_clean = ensure_columns(MVLV_trafos, bus_columns)
+    MVLV_trafos_clean = ensure_columns(MVLV_trafos, trafo_columns)
     HA_Bus_clean = ensure_columns(HA_Bus, bus_columns)
     
     #secure same crs
@@ -474,7 +475,6 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
     None.
 
     """
-
     
     # import buses
     for _, row in buses.iterrows():
@@ -485,6 +485,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         n.buses.at[row["bus_id"], 'comp_type'] = row['comp_type']
         n.buses.at[row["bus_id"], 'house_count'] = row['house_count']
         n.buses.at[row["bus_id"], 'HP'] = row['HP']
+        n.buses.at[row["bus_id"], 'trafo_cap'] = row['TRAFOBELAS']
         n.buses.at[row["bus_id"], 'geom'] = row['geometry']
         
     # import LV lines
@@ -546,20 +547,42 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         lines.at[idx, 'bus_1'] = bus1
         lines.at[idx, 'line_id'] = row['line_id']
     
-    
+   
     
     #add generator at trafo
     trafo_buses = n.buses[n.buses.comp_type=='trafo'] 
+    n.buses = n.buses.drop('trafo_cap', axis='columns')    # trafo_cap column isn't used anymore
     for idx, bus in trafo_buses.iterrows():
-        n.add('Generator', 
-              f'gen_{idx}',
-              bus=bus.name,
+        lv_bus = bus.name               
+        ms_bus = f"{lv_bus}_MS"         #dummy bus for now
+        s_nom = bus.trafo_cap / 1e3
+        
+        n.add("Bus",
+              name=ms_bus,
+              v_nom=20,  
+              carrier="AC",
+              HP = bus.HP,
+              house_count = bus.house_count,
+              geom = bus.geom)
+        
+        n.add("Transformer",
+              name=f"trafo_{lv_bus}",
+              bus0=ms_bus,  
+              bus1=lv_bus,   
+              x=0.03864647477581,        #example vlaues from dingo
+              r=0.0103174603174603,
+              s_nom=s_nom)
+        
+        # 3. Generator am MS-Bus anschließen
+        n.add("Generator", 
+              name=f"gen_{idx}",
+              bus=ms_bus,
+              carrier="AC",
               p_nom=1e6, 
-              marginal_cost=100)   
-    
+              marginal_cost=100)
     
     #add carriers
-    carriers = ["AC", "land_transport_EV"]
+    carriers = ["AC", "land_transport_EV", "14a"]
     for c in carriers:
         n.add("Carrier", c)
 
@@ -588,22 +611,34 @@ def fix_grid_infrastructure(n):
     n.mremove("Line", loop_lines.index.tolist())
     
     #delete unconnected buses
-    con_buses = pd.concat([n.lines.bus0, n.lines.bus1]).unique().tolist()
+    line_buses = pd.concat([n.lines.bus0, n.lines.bus1]).unique()
+    connected_transformers = n.transformers[
+        n.transformers.bus0.isin(line_buses) | n.transformers.bus1.isin(line_buses)
+    ]
+    con_buses = pd.concat([n.lines.bus0, n.lines.bus1, connected_transformers.bus1, connected_transformers.bus0]).unique().tolist()
     uncon_buses = n.buses[~n.buses.index.isin(con_buses)]
+    #filter out connected buses via transformator 
+    
     print(f" ⚠️ Warning: Following buses are not connected to the network: {uncon_buses}")
     print("⚠️ Warning: This buses and connected components will be deleted from the network")
     n.mremove("Bus", uncon_buses.index.tolist())
     
-    components_to_clean = ["Generator"]#, "Load"]  # list extendable
+    components_to_clean = ["Generator", "Transformer"]#, "Load"]  # list extendable
 
     for comp in components_to_clean:
 
         df = n.df(comp)
-        to_remove = df[df.bus.isin(uncon_buses.index)].index.tolist()
+        # Check if the component is a 'Transformer'
+        if comp == "Transformer":
+            # For Transformers, check both bus0 and bus1
+            to_remove = df[df.bus0.isin(uncon_buses.index) | df.bus1.isin(uncon_buses.index)].index.tolist()
+        else:
+            # For other components like 'Generator', use the 'bus' column
+            to_remove = df[df.bus.isin(uncon_buses.index)].index.tolist()
+        
         if to_remove:
             print(f"⚠️ Removing {len(to_remove)} {comp}(s) connected to unconnected buses")
             n.mremove(comp, to_remove)
-    
     
     
 def import_ev_chargers(n):

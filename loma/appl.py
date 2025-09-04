@@ -14,6 +14,7 @@ from network.import_network_from_shape_files import create_pypsa_network
 from demands.import_EV_demand import import_EV_loads
 from demands.import_hp_demand import add_heat_loads_to_network
 from network.flexibilities_14a_heat_pump import insert_heat_pump_flexibilities_14a
+from constraints.constraints import  load_reduction_constraint_14a
 
 
 
@@ -55,7 +56,6 @@ n = import_EV_loads(n, args['path_to_shapefiles_grid'])
 #insert heat pump flexibilities
 n = insert_heat_pump_flexibilities_14a(n)
 
-
 #Optimize
-n.optimize(snapshots=n.snapshots[:24], solver_name='glpk') 
+n.optimize(snapshots=n.snapshots[:24], solver_name='glpk', extra_functionality=load_reduction_constraint_14a)
 
