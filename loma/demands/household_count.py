@@ -103,7 +103,6 @@ def parse_bus_numbers(hn_entry):
 def count_households_per_bus(buses, path):
     #load and prepare data
     q_households = pd.read_csv(path)
-    buses = buses.rename(columns={'HAUSNUMMER': 'Hausnummer', 'LOKATION_S': 'Strasse'})
     buses['parsed_numbers'] = buses['Hausnummer'].apply(parse_bus_numbers)
     q_households[['Hausnummer_int', 'Hausnummer_letter']] = q_households['Nummer'].apply(lambda x: pd.Series(hausnummer_split(x)))
     
@@ -121,7 +120,7 @@ def count_households_per_bus(buses, path):
             continue
         
         # 1) filter buses from the same street
-        street_buses = buses[mask_house_conn & (buses['Strasse'] == street)]
+        street_buses = buses[mask_house_conn & (buses['Straße'] == street)]
         if street_buses.empty:
             continue
         

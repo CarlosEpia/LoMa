@@ -43,7 +43,14 @@ def create_gdf_from_shape(input_folder):
     distributors = gpd.read_file(os.path.join(input_folder, "old_Kabelverteiler", "Gis ST Kabelverteiler Position.shp"))
     joints = gpd.read_file(os.path.join(input_folder, "Gis NSP Muffe Position.shp"))
     MVLV_trafos = gpd.read_file(os.path.join(input_folder, "Gis ST Station Position.shp"))
-
+    
+    #rename columns to generalize the names
+    for df in [HA_Bus, distributors, joints]:
+        df.rename(columns= {'LOKATION_S': 'Straße', 'HAUSNUMMER': 'Hausnummer'}, inplace =True)
+    for df in [MVLV_trafos]:
+        df.rename(columns= {'LOKATION_S': 'Straße', 'HAUSNUMMER': 'Hausnummer', 'TRAFOBELAS': 's_nom'}, inplace =True)
+    
+    
     # component-type-column for distinguish the components
     LV_lines["comp_type"] = "lv_line"
     HA_lines["comp_type"] = "hc_line"
@@ -53,8 +60,8 @@ def create_gdf_from_shape(input_folder):
     HA_Bus["comp_type"] = "house_connection"
     
     ##buses
-    bus_columns = ['comp_type', 'LOKATION_S', 'HAUSNUMMER', 'geometry']
-    trafo_columns = ['comp_type', 'LOKATION_S', 'HAUSNUMMER', 'TRAFOBELAS', 'geometry']
+    bus_columns = ['comp_type', 'Straße', 'Hausnummer', 'geometry']
+    trafo_columns = ['comp_type', 'Straße', 'Hausnummer', 's_nom', 'geometry']
     def ensure_columns(df, columns):
         for col in columns:
             if col not in df.columns:
@@ -485,7 +492,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         n.buses.at[row["bus_id"], 'comp_type'] = row['comp_type']
         n.buses.at[row["bus_id"], 'house_count'] = row['house_count']
         n.buses.at[row["bus_id"], 'HP'] = row['HP']
-        n.buses.at[row["bus_id"], 'trafo_cap'] = row['TRAFOBELAS']
+        n.buses.at[row["bus_id"], 'trafo_cap'] = row['s_nom']
         n.buses.at[row["bus_id"], 'geom'] = row['geometry']
         
     # import LV lines
