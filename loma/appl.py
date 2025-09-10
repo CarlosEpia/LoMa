@@ -15,8 +15,7 @@ from demands.import_EV_demand import import_EV_loads
 from demands.import_hp_demand import add_heat_loads_to_network
 from network.flexibilities_14a_heat_pump import insert_heat_pump_flexibilities_14a
 from constraints.constraints import  load_reduction_constraint_14a
-
-
+from generators.generators import insert_pv_rooftop_and_battery
 
 args = {
         "path_to_shapefiles_grid": 'data/Input_files/Filtered_data_Kronenburg_V3',  # define path of shapefiles for grid infrastructure (related to execution folder)
@@ -24,6 +23,8 @@ args = {
         "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",  
         "path_to_household_data": "data/Input_files/quantity_household_fixed.csv",
         "path_to_heat_pump_data": "data/Input_files/heat_pumps.csv",
+        'batteries_path': 'data/data_bundle/generators_and_batteries/batt_SH.geojson',
+        'pv_rooftop_path': 'data/data_bundle/generators_and_batteries/rooftop_SH.geojson',
         "Kabeltypen": {
             "NAYY 4x240": {"U": 400, "I_max": 364, "R": 0.125, "L": 0.254},     #values based on FaberKabel Starkstromkabel NAYY-J/-O nach VDE 0276-603 (same as dingO-grid-values)
             "NAYY 4x150": {"U": 400, "I_max": 275, "R": 0.206, "L": 0.256},     # U[v], I[A], R[Ohm/km], L[mH/km]
@@ -35,8 +36,11 @@ args = {
 #create pypsa network with grid topology shapefilees
 n = create_pypsa_network(args['path_to_shapefiles_grid'], args['path_to_household_data'], args['path_to_heat_pump_data'], args['Kabeltypen'])
 
+#insert solar_rooftop and home_batteries
+n = insert_pv_rooftop_and_battery(n, args['path_to_shapefile_MV_grid'], args['pv_rooftop_path'], args['batteries_path'],)
+
 #insert cts demand
-#n = inser_cts_demand_per_building(n, args['path_to_shapefile_MV_grid'])
+n = inser_cts_demand_per_building(n, args['path_to_shapefile_MV_grid'])
 
 #insert industrial demands
 n = insert_ind_demand_per_building(n,  args['path_to_shapefile_MV_grid'], args['nuts3_focus_region'])
