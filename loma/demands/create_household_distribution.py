@@ -129,18 +129,19 @@ def create_geometry_for_census_cells(df, path_sh_shape, path_nuts3_shape):
     )
 
     # Transform to WGS84 for compatibility with most shapefiles
-    gdf = gdf.to_crs("EPSG:32632")
+    gdf = gdf.to_crs("EPSG:4326")
 
     # Load SH region boundary and reduce to a single geometry
     sh_geometry = gpd.read_file(path_sh_shape)
-    sh_geometry = sh_geometry.unary_union
+    sh_geometry = sh_geometry.union_all()
 
     # Keep only points within the SH boundary
     gdf_sh = gdf[gdf.geometry.intersects(sh_geometry)]
 
     # Load NUTS3 geometries for spatial join
     geom_nuts3 = gpd.read_file(path_nuts3_shape)
-
+    geom_nuts3 = geom_nuts3.to_crs('EPSG:4326')
+    
     # Spatial join with NUTS3 regions (add 'gen' column from NUTS3 shapefile)
     gdf_sh_with_nuts3 = gpd.sjoin(
         gdf_sh,
@@ -360,7 +361,7 @@ def inhabitants_to_households_V2(df_hh_people_distribution_abs):
         Estimated number of households per type
     """
     #calculate average number of people living in OO/OR Households
-    download_and_check("https://www.zensus2022.de/static/Zensus_Veroeffentlichung/Zensus2022_Groesse_des_privaten_Haushalts_in_Gitterzellen.zip", target_file_hh_size)
+    download_and_check("https://www.destatis.de/static/DE/zensus/gitterdaten/Zensus2022_Groesse_des_privaten_Haushalts_in_Gitterzellen.zip", target_file_hh_size)
     df_hh_size = read_csv_from_zip(target_file_hh_size, "Zensus2022_Groesse_des_privaten_Haushalts_10km-Gitter.csv")
     columns = ["3_Personen", "4_Personen", "5_Personen", "6_Personen_und_mehr"]
     df_hh_size = df_hh_size[columns]
@@ -410,6 +411,7 @@ def filter_df_for_focus_region(df, path):
     "Filter DataFrame for focus region to accelerate the methodology"
     
     region = gpd.read_file(path)
+    region = region.to_crs('EPSG:4326')
     region_geom = region.iloc[0].geometry
     df_region = df[df.geometry.within(region_geom)]
     
@@ -626,14 +628,14 @@ def create_household_dist(path_to_MV_district):
 
     print("File not found. Starting data processing...")
 
-    download_and_check('https://www.zensus2022.de/static/DE/gitterzellen/Typ_des_privaten_Haushalts_Familien.zip', target_file_household_type)
+    download_and_check('https://www.destatis.de/static/DE/zensus/gitterdaten/Typ_des_privaten_Haushalts_Familien.zip', target_file_household_type) 
     df_census_household_grid = read_csv_from_zip(target_file_household_type, "Typ_des_privaten_Haushalts_Familien/Zensus2022_Typ_priv_HH_Familie_100m-Gitter.csv")
     df_census_household_grid = create_geometry_for_census_cells(df_census_household_grid, path_to_sh_shape, path_to_nuts3_sh_shapes)
     
-    download_and_check("https://www.zensus2022.de/static/Zensus_Veroeffentlichung/Zensus2022_Bevoelkerungszahl.zip", target_file_population)
+    download_and_check("https://www.destatis.de/static/DE/zensus/gitterdaten/Zensus2022_Bevoelkerungszahl.zip", target_file_population)
     df_census_population_grid = read_csv_from_zip(target_file_population, "Zensus2022_Bevoelkerungszahl_100m-Gitter.csv")
     df_census_population_grid = create_geometry_for_census_cells(df_census_population_grid, path_to_sh_shape, path_to_nuts3_sh_shapes)
-    
+
     df_census_household_grid_region = filter_df_for_focus_region(df_census_household_grid, path_to_MV_district)  
     df_census_population_grid_region = filter_df_for_focus_region(df_census_population_grid, path_to_MV_district)
     df_census_household_grid_region = impute_missing_hh_in_populated_cells(df_census_population_grid_region, df_census_household_grid_region)    
