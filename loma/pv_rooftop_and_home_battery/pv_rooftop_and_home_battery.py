@@ -1,10 +1,4 @@
 import geopandas as gpd
-import numpy as np
-import pandas as pd
-from egon.data import db, logger
-import psycopg2
-import pypsa
-import geopandas as gpd
 import logging
 
 
@@ -39,30 +33,16 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path):
         lambda b: f"pv_roof_{b.name}_{b.bus}", axis=1
     )
     solar.set_index("Generator", drop=True, inplace=True)
-
     solar["carrier"] = "solar_rooftop"
-    solar["sign"] = 1
-    solar["p_set"] = 0
-    solar["q_set"] = 0
-    solar["control"] = "PQ"
-    solar["p_nom_extendable"] = False
+    solar["efficiency_dispatch"] = 0.9
 
-    network.generators = pd.concat(
-        [
-            network.loads,
-            solar[
-                [
-                    "bus",
-                    "carrier",
-                    "sign",
-                    "control",
-                    "p_nom",
-                    "p_set",
-                    "q_set",
-                    "p_nom_extendable",
-                ]
-            ],
-        ]
+    network.add(
+        "Generator",
+        name=solar.index,
+        bus=solar["bus"],
+        carrier=solar["carrier"],
+        p_nom=solar["p_nom"],
+        efficiency_dispatch=solar["efficiency_dispatch"],
     )
 
     return network
@@ -94,21 +74,13 @@ def insert_home_battery(network, shape, buses, batteries_path):
     bat["control"] = "PQ"
     bat["p_nom_extendable"] = False
 
-    network.storage_units = pd.concat(
-        [
-            network.loads,
-            bat[
-                [
-                    "bus",
-                    "carrier",
-                    "sign",
-                    "control",
-                    "p_nom",
-                    "max_hours",
-                    "p_nom_extendable",
-                ]
-            ],
-        ]
+    network.add(
+        "StorageUnit",
+        name=bat.index,
+        bus=bat["bus"],
+        carrier=bat["carrier"],
+        p_nom=bat["p_nom"],
+        max_hours=bat["max_hours"],
     )
 
     return network
