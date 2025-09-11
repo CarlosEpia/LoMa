@@ -29,6 +29,7 @@ args = {
     "path_to_heat_pump_data": "data/Input_files/heat_pumps.csv",
     "batteries_path": "data/data_bundle/generators_and_batteries/batt_SH.geojson",
     "pv_rooftop_path": "data/data_bundle/generators_and_batteries/rooftop_SH.geojson",
+    "pv_feedin_path": "data/data_bundle/generators_and_batteries/pv_feedin.csv",
     "Kabeltypen": {
         "NAYY 4x240": {
             "U": 400,
@@ -60,6 +61,7 @@ n = insert_pv_rooftop_and_battery(
     n,
     args["path_to_shapefile_MV_grid"],
     args["pv_rooftop_path"],
+    args["pv_feedin_path"],
     args["batteries_path"],
 )
 
