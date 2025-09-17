@@ -6,18 +6,20 @@ Created on Thu Jun 19 15:11:55 2025
 @author: student
 """
 
-from demands.create_household_distribution import create_household_dist
-from demands.create_industrial_demand import insert_ind_demand_per_building
-from demands.cts_demands import inser_cts_demand_per_building
-from demands.import_household_demand import distribute_household_demand
-from network.import_network_from_shape_files import create_pypsa_network
-from demands.import_EV_demand import import_EV_loads
-from demands.import_hp_demand import add_heat_loads_to_network
-from network.flexibilities_14a_heat_pump import (
+from loma.demands.create_household_distribution import create_household_dist
+from loma.demands.create_industrial_demand import (
+    insert_ind_demand_per_building,
+)
+from loma.demands.cts_demands import inser_cts_demand_per_building
+from loma.demands.import_household_demand import distribute_household_demand
+from loma.network.import_network_from_shape_files import create_pypsa_network
+from loma.demands.import_EV_demand import import_EV_loads
+from loma.demands.import_hp_demand import add_heat_loads_to_network
+from loma.network.flexibilities_14a_heat_pump import (
     insert_heat_pump_flexibilities_14a,
 )
-from constraints.constraints import load_reduction_constraint_14a
-from pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
+from loma.constraints.constraints import load_reduction_constraint_14a
+from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
     insert_pv_rooftop_and_battery,
 )
 
@@ -56,7 +58,7 @@ n = create_pypsa_network(
     args["Kabeltypen"],
 )
 
-#insert solar_rooftop and home_batteries
+# insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
     n,
     args["path_to_shapefile_MV_grid"],
