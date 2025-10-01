@@ -25,11 +25,12 @@ args = {
     "path_to_shapefiles_grid": "data/Input_files/Filtered_data_Kronenburg_V3",  # define path of shapefiles for grid infrastructure (related to execution folder)
     "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
     "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
-    "path_to_household_data": "data/Input_files/quantity_household_fixed.csv",
+    "path_to_household_data": "data/Input_files/all_streets_household_count.csv",
     "path_to_heat_pump_data": "data/Input_files/heat_pumps.csv",
     "batteries_path": "data/data_bundle/generators_and_batteries/batt_SH.geojson",
     "pv_rooftop_path": "data/data_bundle/generators_and_batteries/rooftop_SH.geojson",
     "pv_feedin_path": "data/data_bundle/generators_and_batteries/pv_feedin.csv",
+    "use_census_household_data": False,
     "Kabeltypen": {
         "NAYY 4x240": {
             "U": 400,
@@ -48,13 +49,12 @@ args = {
     },
 }
 
-# create pypsa network with grid topology shapefilees
-n = create_pypsa_network(
-    args["path_to_shapefiles_grid"],
-    args["path_to_household_data"],
-    args["path_to_heat_pump_data"],
-    args["Kabeltypen"],
-)
+
+#household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
+household_dist_df = create_household_dist(args['path_to_shapefile_MV_grid'])
+
+#create pypsa network with grid topology shapefilees
+n = create_pypsa_network(args['path_to_shapefiles_grid'], args['path_to_household_data'], args['path_to_heat_pump_data'], args['Kabeltypen'], args['use_census_household_data'], household_dist_df)
 
 #insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
@@ -73,11 +73,8 @@ n = insert_ind_demand_per_building(
     n, args["path_to_shapefile_MV_grid"], args["nuts3_focus_region"]
 )
 
-# household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
-household_dist_df = create_household_dist(args["path_to_shapefile_MV_grid"])
-
 # allocate profiles to buses
-n = distribute_household_demand(n, household_dist_df)
+n = distribute_household_demand(n, household_dist_df, args['use_census_household_data'])
 
 # insert_heat_loas_for_heat_pump_location
 n = add_heat_loads_to_network(n)

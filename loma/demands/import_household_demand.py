@@ -28,7 +28,7 @@ def create_profile_pool_from_df(profil_type, profiles_df, limit=1):
     
     return profile
 
-def distribute_household_demand(n, profile_dist):
+def distribute_household_demand(n, profile_dist, household_count):
     
     """
     
@@ -36,13 +36,16 @@ def distribute_household_demand(n, profile_dist):
     # Load profile pool from HDF file
     pool = pd.read_hdf('data/data_bundle/hh_el_load_profiles_100k.hdf')
 
-    # Ensure profile_dist is a GeoDataFrame
+    # Ensure profile_dist is a GeoDataFrame and change crs system
     if not isinstance(profile_dist, gpd.GeoDataFrame):
         profile_dist = gpd.GeoDataFrame(
             profile_dist,
             geometry=gpd.GeoSeries.from_wkt(profile_dist['geometry'])
         )
-
+    profile_dist = profile_dist.set_crs("EPSG:4326") 
+    profile_dist = profile_dist.to_crs("EPSG:32632")
+        
+        
     # Define available profile types
     profil_types = ['SR', 'SO', 'SK', 'PR', 'PO', 'OR', 'OO', 'P1', 'P2', 'P3']
     # Define time index for one year with hourly resolution
@@ -50,6 +53,7 @@ def distribute_household_demand(n, profile_dist):
 
     # Dictionary to collect all load time series before concatenation
     new_profiles = {}
+    
 
     # Iterate over all house connection buses
     for bus_name, bus in n.buses[n.buses.comp_type == 'house_connection'].iterrows():
@@ -64,7 +68,7 @@ def distribute_household_demand(n, profile_dist):
         percentage = closest_row[profil_types].astype(float).values
 
         # Create one load per household at this bus
-        for i in range(1, int(bus.house_count) + 1):
+        for i in range(1, int(bus.household_count) + 1):
             # Randomly select a profile type based on probabilities
             profil_type = np.random.choice(profil_types, p=percentage)
             profile = create_profile_pool_from_df(profil_type, pool, limit=1)

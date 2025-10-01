@@ -15,11 +15,12 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pypsa
-from demands.household_count import count_households_per_bus
 from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Point
 from shapely.strtree import STRtree
 from demands.import_hp_demand import check_heat_pumps
+from demands.household_count import count_households_per_bus_input_file
+from demands.household_count import count_households_per_bus_census_data
 
 
 
@@ -220,6 +221,8 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
             snapped_indices.append(idx)
             
     buses_updated = pd.concat([joint_buses, other_buses]).sort_index()   
+    
+    buses_updated.to_file('/home/student/Documents/LoMa/Code/test_grid_buses_before_network.shp')
     
     return buses_updated
 
@@ -464,7 +467,7 @@ def get_nearest_bus(point, bus_tree, buses_df):
 
 
 ###creating pypsa grid 
-def import_grid_infrastructure(n, buses, lines, cable_types):
+def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     """    
     Based on exported shapefiles recreate the grid infrastructure as pysa_network
 
@@ -490,7 +493,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
           x=row.geometry.x,
           y=row.geometry.y)
         n.buses.at[row["bus_id"], 'comp_type'] = row['comp_type']
-        n.buses.at[row["bus_id"], 'house_count'] = row['house_count']
+        n.buses.at[row["bus_id"], 'household_count'] = row['household_count']
         n.buses.at[row["bus_id"], 'HP'] = row['HP']
         n.buses.at[row["bus_id"], 'trafo_cap'] = row['s_nom']
         n.buses.at[row["bus_id"], 'geom'] = row['geometry']
@@ -569,7 +572,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
               v_nom=20,  
               carrier="AC",
               HP = bus.HP,
-              house_count = bus.house_count,
+              household_count = bus.household_count,
               geom = bus.geom)
         
         n.add("Transformer",
@@ -656,14 +659,17 @@ def import_ev_chargers(n):
 
     
 
-def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_folder, cable_types):
+def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_folder, cable_types, household_count, census_data):
     n = pypsa.Network()
     time_index = pd.date_range('2023-01-01', periods=8760, freq='h')
     n.snapshots = time_index
     
     buses, lines = create_gdf_from_shape(shape_files_folder)
     buses = snap_joint_buses_to_lines(lines, buses)
-    buses = count_households_per_bus(buses, q_households_folder)
+    if household_count: #check if household_data taken from cencus or own input_file
+        buses = count_households_per_bus_census_data(buses, census_data)
+    else:
+        buses = count_households_per_bus_input_file(buses, q_households_folder)  
     buses = check_heat_pumps(buses, heat_pump_folder)
    
     #final_load_buses = map_load_bus_to_network_bus(buses, lines)
@@ -671,7 +677,7 @@ def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_fold
     #all_network_buses = pd.concat([final_load_buses, network_buses])
     split_lines = split_lines_on_joints(lines, buses)
     #merged_lines = merge_unconnected_lines(split_lines, buses)
-    import_grid_infrastructure(n, buses, split_lines, cable_types) 
+    import_grid_infrastructure(n, buses, split_lines, cable_types, household_count) 
     fix_grid_infrastructure(n)
     n = open_LV_circle(n, 'line_187')
     

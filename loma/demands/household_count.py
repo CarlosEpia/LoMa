@@ -6,11 +6,13 @@ Created on Fri Aug 15 09:10:51 2025
 @author: student
 """
 import re
-
-import geopandas as gpd
-#### manual household count based on inout file
 import pandas as pd
+import geopandas as gpd
+from rapidfuzz import process, fuzz
+import numpy as np
+from shapely.geometry import Point
 
+#### manual household count based on inout file
 
 def hausnummer_split(hn):
     """
@@ -100,65 +102,130 @@ def parse_bus_numbers(hn_entry):
 '''
 
 
-def count_households_per_bus(buses, path):
-    #load and prepare data
+    
+def count_households_per_bus_input_file(buses, path, threshold=90):
+    # load households
     q_households = pd.read_csv(path)
+    
+    # parse house numbers
     buses['parsed_numbers'] = buses['Hausnummer'].apply(parse_bus_numbers)
     q_households[['Hausnummer_int', 'Hausnummer_letter']] = q_households['Nummer'].apply(lambda x: pd.Series(hausnummer_split(x)))
     
-    buses['house_count'] = 0
-    mask_house_conn = buses['comp_type'] == 'house_connection'
-    buses.loc[mask_house_conn, 'house_count'] = 1
     
-    # match each entry of q_households with one bus
+    # initialize counts
+    buses['household_count'] = 0
+    mask_house_conn = buses['comp_type'] == 'house_connection'
+    
+    
+    # match each household
     for _, hh_row in q_households.iterrows():
         street = hh_row['Straße']
         num = hh_row['Hausnummer_int']
         letter = hh_row['Hausnummer_letter']
-        
+        #print('aktuelle_starße', street)
         if pd.isna(num):
             continue
         
-        # 1) filter buses from the same street
-        street_buses = buses[mask_house_conn & (buses['Straße'] == street)]
+        # fuzzy match street name
+        street_choices = buses.loc[mask_house_conn, 'Straße'].tolist()
+        best_match, score, _ = process.extractOne(street, street_choices, scorer=fuzz.ratio)
+        if score < threshold:
+            print(street, 'übersprungen')
+            continue  # kein brauchbarer Match
+        
+        # filter buses on that street
+        street_buses = buses[mask_house_conn & (buses['Straße'] == best_match)]
         if street_buses.empty:
+            print('Adresse:', street, num, letter, 'übersprungen')
             continue
         
-        # 2) try to find exact match (Number, letter))
+        # 1) exact match (number + letter)
         exact_matches = street_buses[
             street_buses['parsed_numbers'].apply(lambda nums: (num, letter) in nums)
         ]
-        
         if not exact_matches.empty:
-            buses.loc[exact_matches.index, 'house_count'] += 1
+            buses.loc[exact_matches.index, 'household_count'] += 1
+           #print('Adresse:', street, num, letter, exact_matches[['Straße','parsed_numbers']])
             continue
         
-        # 3) Fallback: just compare number without letter
+        # 2) fallback: match number only
         number_matches = street_buses[
             street_buses['parsed_numbers'].apply(lambda nums: any(n == num for n, _ in nums))
         ]
         if not number_matches.empty:
-            buses.loc[number_matches.index, 'house_count'] += 1
+            buses.loc[number_matches.index, 'household_count'] += 1
+            #print('Adresse:', street, num, letter, number_matches[['Straße','parsed_numbers']])
             continue
-        
-        # 4) Fallback: close number on the same street side if available
-        same_side = street_buses[
-            street_buses['parsed_numbers'].apply(lambda nums: any(n % 2 == num % 2 for n, _ in nums))
+
+        # 3) fallback: nearest number on same side
+        valid_street_buses = street_buses[
+            street_buses['parsed_numbers'].apply(
+                lambda nums: nums is not None and any(n is not None and not (isinstance(n, float) and np.isnan(n)) for n, _ in nums)
+            )
         ]
+         
+        same_side = valid_street_buses[
+            valid_street_buses['parsed_numbers'].apply(lambda nums: any(n % 2 == num % 2 for n, _ in nums))
+        ]
+        
         if same_side.empty:
-            same_side = street_buses  # if no one on same side use all buses
+            same_side = valid_street_buses  # if no one on same side use all buses
         
         def min_diff(nums):
             return min(abs(n - num) for n, _ in nums)
         
         same_side = same_side.assign(diff=same_side['parsed_numbers'].apply(min_diff))
         nearest_idx = same_side['diff'].idxmin()
-        buses.loc[nearest_idx, 'house_count'] += 1
+        buses.loc[nearest_idx, 'household_count'] += 1
         
+        #print('Adresse:', street, num, letter, buses.loc[nearest_idx, ['Straße', 'parsed_numbers']])
+    
+    # secure that every house_connection bus has at least one one household
+    buses.loc[mask_house_conn & (buses['household_count'] == 0), 'household_count'] = 1
+    
     return buses
                
+          
                
-               
-               
+def count_households_per_bus_census_data(buses, census_data):
+    #import pdb; pdb.set_trace()
+    #create GeoDataFrames
+    census_data = gpd.GeoDataFrame(census_data, geometry=gpd.GeoSeries.from_wkt(census_data['geometry']), crs="EPSG:4326")
+    census_data = census_data.to_crs('EPSG:32632') 
+    buses = gpd.GeoDataFrame(buses.copy(), geometry="geometry", crs="EPSG:32632")
     
-#
+    #find corresponding cell for each house_bus
+    house_buses = buses[buses["comp_type"] == "house_connection"].copy()
+    house_buses = gpd.sjoin_nearest(
+        house_buses, 
+        census_data[["geometry", "Insgesamt_Haushalte"]], 
+        how="left", 
+        distance_col="dist"
+    )
+    house_buses = house_buses.rename(columns={'index_right': 'closest_cell'}) 
+    
+    #distribute amount of households for each cell equaly under the buses
+    house_buses["household_count"] = 0
+    for cell_idx, group in house_buses.groupby("closest_cell").groups.items():
+        n_buses = len(group)
+        households_in_cell = census_data.loc[cell_idx, "Insgesamt_Haushalte"]
+        base = households_in_cell // n_buses
+        rest = households_in_cell % n_buses
+    
+        counts = np.full(n_buses, base, dtype=int)
+        counts[:int(rest)] += 1  # Rest gleichmäßig verteilen
+        
+        house_buses.loc[group, "household_count"] = counts
+    
+    #set amount of households in bus-dataframe
+    house_buses["household_count"] = house_buses["household_count"].apply(lambda x: max(1, x))
+    buses = buses.merge(
+        house_buses[["household_count"]],
+        left_index=True,
+        right_index=True,
+        how="left"
+    )
+    #secure that no NaN values ecist
+    buses["household_count"] = buses["household_count"].fillna(0).astype(int)
+
+    return buses
