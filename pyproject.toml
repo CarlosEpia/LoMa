@@ -26,5 +26,6 @@ dependencies = [
   "pypsa",
   "tables",
   "glpk",
+  "rapidfuzz",
 ]
 dynamic = []

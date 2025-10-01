@@ -24,7 +24,7 @@ from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
 )
 
 args = {
-    "path_to_shapefiles_grid": "data/Input_files/Filtered_data_Kronenburg_V3",  # define path of shapefiles for grid infrastructure (related to execution folder)
+    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid",  # define path of shapefiles for grid infrastructure (related to execution folder)
     "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
     "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
     "path_to_household_data": "data/Input_files/all_streets_household_count.csv",
@@ -32,7 +32,7 @@ args = {
     "batteries_path": "data/data_bundle/generators_and_batteries/batt_SH.geojson",
     "pv_rooftop_path": "data/data_bundle/generators_and_batteries/rooftop_SH.geojson",
     "pv_feedin_path": "data/data_bundle/generators_and_batteries/pv_feedin.csv",
-    "use_census_household_data": False,
+    "use_census_household_data": True,
     "Kabeltypen": {
         "NAYY 4x240": {
             "U": 400,

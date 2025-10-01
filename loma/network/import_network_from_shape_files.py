@@ -41,7 +41,7 @@ def create_gdf_from_shape(input_folder):
     LV_lines = gpd.read_file(os.path.join(input_folder, "Gis NSP Kabelabschnitt Verlauf.shp"))
     HA_lines = gpd.read_file(os.path.join(input_folder, "Gis NSP HA Abschnitt Verlauf.shp"))
     HA_Bus = gpd.read_file(os.path.join(input_folder, "Gis NSP HA Kasten Position.shp"))
-    distributors = gpd.read_file(os.path.join(input_folder, "old_Kabelverteiler", "Gis ST Kabelverteiler Position.shp"))
+    distributors = gpd.read_file(os.path.join(input_folder, "Gis ST Kabelverteiler Position.shp"))
     joints = gpd.read_file(os.path.join(input_folder, "Gis NSP Muffe Position.shp"))
     MVLV_trafos = gpd.read_file(os.path.join(input_folder, "Gis ST Station Position.shp"))
     
@@ -185,7 +185,7 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
     lines['line_id'] = ['line_' + str(i) for i in range(len(lines))]
     
     # # Optional: Export
-    # lines.to_file('/home/student/Documents/LoMa/Code/test_splited_LV_line.shp')
+    lines.to_file('/home/student/Documents/LoMa/Code/test_splited_LV_line.shp')
 
     return lines
 
@@ -592,13 +592,13 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
               marginal_cost=100)
     
     #add carriers
-    carriers = ["AC", "land_transport_EV", "14a"]
+    carriers = ["AC", "land_transport_EV", "14a", "home_battery", "solar_rooftop"]
     for c in carriers:
         n.add("Carrier", c)
 
     # #optional export for validating infrasturcture
-    # lines.to_file('/home/student/Documents/LoMa/Code/test_grid_lines.shp')
-    # buses.to_file('/home/student/Documents/LoMa/Code/test_grid_buses.shp')
+    lines.to_file('/home/student/Documents/LoMa/Code/test_grid_lines.shp')
+    buses.to_file('/home/student/Documents/LoMa/Code/test_grid_buses.shp')
     
     
 
@@ -679,7 +679,7 @@ def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_fold
     #merged_lines = merge_unconnected_lines(split_lines, buses)
     import_grid_infrastructure(n, buses, split_lines, cable_types, household_count) 
     fix_grid_infrastructure(n)
-    n = open_LV_circle(n, 'line_187')
+    n = open_LV_circle(n, 'line_163')
     
     return n
     
