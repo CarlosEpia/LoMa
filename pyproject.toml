@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "LoMa"
+version = "0.0.0"
+authors = [
+    {name = "Carlos Epia", email = "carlos.epia@hs-flensburg.de"},
+    {name = "Lennart Zimmermann", email = "lennart.zimmermann@hs-flensburg.de"},
+]
+description = """The LoMa package is a tool to evaluate the potential of the
+paragraph 14a to provide flexibilities in German medium voltage and low
+voltage grids"""
+readme = "README.rst"
+requires-python = ">=3.10"
+keywords = ["Low voltage", "Medium voltage", "Paragraph 14a", "Grid flexibilities",
+"Home battery", "wallbox", "Heat pump", "curtailment"]
+license =  { text = "AGPL-3.0-or-later" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+  "geopandas",
+  "osmnx",
+  "pypsa",
+  "tables",
+  "glpk",
+]
+dynamic = []
