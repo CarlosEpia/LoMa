@@ -40,14 +40,16 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path):
     solar["carrier"] = "solar_rooftop"
     solar["efficiency_dispatch"] = 0.9
 
-    network.add(
+    for name, row in solar.iterrows():  # Später eingefügt,weiß nicht ob das richtig ist
+        network.add(
         "Generator",
-        name=solar.index,
-        bus=solar["bus"],
-        carrier=solar["carrier"],
-        p_nom=solar["p_nom"],
-        efficiency_dispatch=solar["efficiency_dispatch"],
+        name=name,
+        bus=row["bus"],
+        carrier=row["carrier"],
+        p_nom=float(row["p_nom"]),
+        efficiency_dispatch=float(row["efficiency_dispatch"]),
     )
+
 
     solar_t = pd.read_csv(
         pv_feedin_path,
@@ -92,13 +94,14 @@ def insert_home_battery(network, shape, buses, batteries_path):
     bat["control"] = "PQ"
     bat["p_nom_extendable"] = False
 
-    network.add(
+    for name, row in bat.iterrows():
+        network.add(
         "StorageUnit",
-        name=bat.index,
-        bus=bat["bus"],
-        carrier=bat["carrier"],
-        p_nom=bat["p_nom"],
-        max_hours=bat["max_hours"],
+        name=name,
+        bus=row["bus"],
+        carrier=row["carrier"],
+        p_nom=float(row["p_nom"]),
+        max_hours=float(row["max_hours"]),
     )
 
     return network

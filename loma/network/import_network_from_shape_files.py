@@ -597,7 +597,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
         n.add("Carrier", c)
 
     return buses, lines
-    
+
     
 
 def open_LV_circle(n, lv_line_idx):
