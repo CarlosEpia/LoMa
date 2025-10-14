@@ -28,9 +28,9 @@ def load_reduction_constraint_14a(n, snapshots):
         p_max = n.generators.p_nom[gen]
 
         # Couple binary variable with power of generator
-        for t in snapshots:
+        for i, t in enumerate(snapshots):
             n.model.add_constraints(
-                lhs=p[t] - p_max * on[t],
+                lhs=p[i] - p_max * on[i],
                 sign="<=",
                 rhs=0,
                 name=f"link_on_{gen}_{t}"
@@ -38,9 +38,11 @@ def load_reduction_constraint_14a(n, snapshots):
         
         # Sliding Window: max. 2h on per day
         for day in snapshots.to_series().dt.floor("D").unique():
-            window = [t for t in snapshots if t.floor("D") == day]
+            # Liste der Indizes (Positionen) für diesen Tag
+            window_idx = [i for i, t in enumerate(snapshots) if t.floor("D") == day]
+            
             n.model.add_constraints(
-                lhs=sum(on[t] for t in window),
+                lhs=sum(on[i] for i in window_idx),
                 sign="<=",
                 rhs=2,
                 name=f"max2h_per_day_{gen}_{day}"

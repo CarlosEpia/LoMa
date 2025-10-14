@@ -24,7 +24,7 @@ from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
 )
 
 args = {
-    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid",  # define path of shapefiles for grid infrastructure (related to execution folder)
+    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V2",  # define path of shapefiles for grid infrastructure (related to execution folder)
     "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
     "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
     "path_to_household_data": "data/Input_files/all_streets_household_count.csv",
@@ -32,7 +32,7 @@ args = {
     "batteries_path": "data/data_bundle/generators_and_batteries/batt_SH.geojson",
     "pv_rooftop_path": "data/data_bundle/generators_and_batteries/rooftop_SH.geojson",
     "pv_feedin_path": "data/data_bundle/generators_and_batteries/pv_feedin.csv",
-    "use_census_household_data": True,
+    "use_census_household_data": False,
     "Kabeltypen": {
         "NAYY 4x240": {
             "U": 400,
@@ -67,6 +67,9 @@ n = insert_pv_rooftop_and_battery(
     args["batteries_path"],
 )
 
+# allocate profiles to buses
+n = distribute_household_demand(n, household_dist_df, args['use_census_household_data'])
+
 # insert cts demand
 n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
 
@@ -74,9 +77,6 @@ n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
 n = insert_ind_demand_per_building(
     n, args["path_to_shapefile_MV_grid"], args["nuts3_focus_region"]
 )
-
-# allocate profiles to buses
-n = distribute_household_demand(n, household_dist_df, args['use_census_household_data'])
 
 # insert_heat_loas_for_heat_pump_location
 n = add_heat_loads_to_network(n)
@@ -89,7 +89,9 @@ n = insert_heat_pump_flexibilities_14a(n)
 
 # Optimize
 n.optimize(
-    snapshots=n.snapshots[:24],
+    snapshots=n.snapshots[:240],
     solver_name="glpk",
     extra_functionality=load_reduction_constraint_14a,
 )
+
+

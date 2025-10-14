@@ -549,6 +549,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
               length=length_km, r=r, x=x, s_nom=s_nom)
         n.lines.at[row["line_id"], 'comp_type'] = row['comp_type']
         n.lines.at[row["line_id"], 'geom'] = row['geometry']
+        n.lines.at[row["line_id"], 'cable_type'] = row['KABELTYP']
         lines.at[idx, 'bus_0'] = bus0
         lines.at[idx, 'bus_1'] = bus1
         
