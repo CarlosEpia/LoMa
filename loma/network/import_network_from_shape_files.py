@@ -157,7 +157,7 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
 
         # filter relevant buses (just split at the joint-buses)
         joint_buses = buses[buses.comp_type.isin(['Hausanschlußmuffe', 'Verbindungsmuffe', 'Endmuffe',
-                                              'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende'])].copy()
+                                              'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende', 'HA-Kombimuffe'])].copy()
 
         joint_buses['distance'] = joint_buses.geometry.apply(lambda p: line_geom.distance(p))
         near_joints = joint_buses[joint_buses['distance'] < tolerance]
@@ -184,8 +184,8 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
     lines = split_lines_gdf.reset_index(drop=True)
     lines['line_id'] = ['line_' + str(i) for i in range(len(lines))]
     
-    # # Optional: Export
-    lines.to_file('/home/student/Documents/LoMa/Code/test_splited_LV_line.shp')
+    # # Optional: Export  
+    #lines.to_file('/home/student/Documents/LoMa/Code/test_splited_LV_line.shp')
 
     return lines
 
@@ -197,10 +197,10 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
     Secures that coords from buses are directly on the line to avoid skipping inaccurate data.
     """
     joint_buses = buses[buses.comp_type.isin(['Hausanschlußmuffe', 'Verbindungsmuffe', 'Endmuffe',
-                                          'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende'])].copy()
+                                          'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende', 'HA-Kombimuffe'])].copy()
 
     other_buses = buses[~buses.comp_type.isin(['Hausanschlußmuffe', 'Verbindungsmuffe', 'Endmuffe',
-                                           'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende'])].copy()
+                                           'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende', 'HA-Kombimuffe'])].copy()
 
     
     LV_lines = lines[lines.comp_type=='lv_line']
@@ -222,7 +222,7 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
             
     buses_updated = pd.concat([joint_buses, other_buses]).sort_index()   
     
-    buses_updated.to_file('/home/student/Documents/LoMa/Code/test_grid_buses_before_network.shp')
+    #buses_updated.to_file('/home/student/Documents/LoMa/Code/test_grid_buses_before_network.shp')
     
     return buses_updated
 
@@ -597,9 +597,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     for c in carriers:
         n.add("Carrier", c)
 
-    # #optional export for validating infrasturcture
-    lines.to_file('/home/student/Documents/LoMa/Code/test_grid_lines.shp')
-    buses.to_file('/home/student/Documents/LoMa/Code/test_grid_buses.shp')
+    return buses, lines
     
     
 
@@ -660,7 +658,7 @@ def import_ev_chargers(n):
 
     
 
-def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_folder, cable_types, household_count, census_data):
+def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_folder, cable_types, household_count, export_shape_files, census_data):
     n = pypsa.Network()
     time_index = pd.date_range('2023-01-01', periods=8760, freq='h')
     n.snapshots = time_index
@@ -678,7 +676,11 @@ def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_fold
     #all_network_buses = pd.concat([final_load_buses, network_buses])
     split_lines = split_lines_on_joints(lines, buses)
     #merged_lines = merge_unconnected_lines(split_lines, buses)
-    import_grid_infrastructure(n, buses, split_lines, cable_types, household_count) 
+    buses, lines = import_grid_infrastructure(n, buses, split_lines, cable_types, household_count) 
+    if export_shape_files:
+        os.makedirs('results', exist_ok=True)
+        buses.to_file('results/grid_buses_test.shp')
+        lines.to_file('results/grid_lines_test.shp')
     fix_grid_infrastructure(n)
     n = open_LV_circle(n, 'line_163')
     

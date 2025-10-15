@@ -33,6 +33,7 @@ args = {
     "pv_rooftop_path": "data/data_bundle/generators_and_batteries/rooftop_SH.geojson",
     "pv_feedin_path": "data/data_bundle/generators_and_batteries/pv_feedin.csv",
     "use_census_household_data": False,
+    "export_shape_files_grid": False,
     "Kabeltypen": {
         "NAYY 4x240": {
             "U": 400,
@@ -56,7 +57,14 @@ args = {
 household_dist_df = create_household_dist(args['path_to_shapefile_MV_grid'])
 
 #create pypsa network with grid topology shapefilees
-n = create_pypsa_network(args['path_to_shapefiles_grid'], args['path_to_household_data'], args['path_to_heat_pump_data'], args['Kabeltypen'], args['use_census_household_data'], household_dist_df)
+n = create_pypsa_network(
+    args['path_to_shapefiles_grid'], 
+    args['path_to_household_data'], 
+    args['path_to_heat_pump_data'], 
+    args['Kabeltypen'], 
+    args['use_census_household_data'], 
+    args['export_shape_files_grid'], 
+    household_dist_df)
 
 # insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(

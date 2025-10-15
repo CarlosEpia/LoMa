@@ -21,6 +21,9 @@ if not nx.is_connected(G):
      print(f"Anzahl Teilnetze: {len(components)}")
      print("Größen der Teilnetze:", [len(c) for c in components]) 
      
+     for i, comp in enumerate(components):
+        print(f"\nTeilnetz {i+1}: ({len(comp)} Busse)")
+        print(sorted(comp))
      
      
      
