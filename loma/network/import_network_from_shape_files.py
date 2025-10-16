@@ -85,8 +85,7 @@ def create_gdf_from_shape(input_folder):
     # combine all bus-datfarmes
     buses = pd.concat([joints_clean, distributors_clean, MVLV_trafos_clean, HA_Bus_clean], ignore_index=True)
     buses["bus_id"] = [f"bus_{i}" for i in range(len(buses))]
-    buses = buses.reset_index(drop=True)
-    
+    buses = buses.reset_index(drop=True)   
     
     ##lines
     line_columns = ['comp_type', 'KABELTYP', 'geometry' ]
@@ -157,7 +156,7 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
 
         # filter relevant buses (just split at the joint-buses)
         joint_buses = buses[buses.comp_type.isin(['Hausanschlußmuffe', 'Verbindungsmuffe', 'Endmuffe',
-                                              'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende', 'HA-Kombimuffe'])].copy()
+                                              'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende', 'HA-Kombimuffe', 'distributor'])].copy()
 
         joint_buses['distance'] = joint_buses.geometry.apply(lambda p: line_geom.distance(p))
         near_joints = joint_buses[joint_buses['distance'] < tolerance]
@@ -203,8 +202,8 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
                                            'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende', 'HA-Kombimuffe'])].copy()
 
     
-    LV_lines = lines[lines.comp_type=='lv_line']
-    line_geometries = list(LV_lines.geometry)
+    lines = lines[lines.comp_type.isin(['lv_line', 'hc_line'])]
+    line_geometries = list(lines.geometry)
     str_tree = STRtree(line_geometries)
     
     snapped_indices = [] 
@@ -514,16 +513,17 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
         # Starte mit allen relevanten Bussen
         bus0, dist0 = get_nearest_bus(start_point, bus_tree, relevant_buses)
         bus1, dist1 = get_nearest_bus(end_point, bus_tree, relevant_buses)
+        
 
         # if closest bus not directly next to the start/endpoint connect trafo/distributor bus
-        if 10 > dist0 > 0.1 and row['comp_type']=='lv_line':
+        if 10 > dist0 > 0.1 :#and row['comp_type']=='lv_line':
             #print('##### line connecting to trafo/dist ############', 'Line:', idx)
             traf_dist_buses = buses[buses.comp_type.isin(['distributor', 'trafo'])].reset_index(drop=True)
             traf_dist_coords = np.array([[geom.x, geom.y] for geom in traf_dist_buses.geometry])
             traf_dist_tree = cKDTree(traf_dist_coords)
             bus0, _ = get_nearest_bus(start_point, traf_dist_tree, traf_dist_buses)
     
-        if 10 > dist1 > 0.1 and row['comp_type']=='lv_line':
+        if 10 > dist1 > 0.1 :#and row['comp_type']=='lv_line':
             #print('##### line connecting to trafo/dist ############', 'Line:', idx)
             traf_dist_buses = buses[buses.comp_type.isin(['distributor', 'trafo'])].reset_index(drop=True)
             traf_dist_coords = np.array([[geom.x, geom.y] for geom in traf_dist_buses.geometry])
@@ -541,17 +541,15 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
            # ToDo: define reasonable default-values
            r = 0.3
            x = 0.05
-           s_nom = 100e6
+           s_nom = 1
+         
+        capital_costs = 100_000*length_km/s_nom
            
-        
-    
         n.add("Line", row['line_id'], bus0=bus0, bus1=bus1, carrier='AC',
-              length=length_km, r=r, x=x, s_nom=s_nom)
+              length=length_km, r=r, x=x, s_nom=s_nom, s_nom_min = s_nom, capital_cost = capital_costs)
         n.lines.at[row["line_id"], 'comp_type'] = row['comp_type']
         n.lines.at[row["line_id"], 'geom'] = row['geometry']
         n.lines.at[row["line_id"], 'cable_type'] = row['KABELTYP']
-        lines.at[idx, 'bus_0'] = bus0
-        lines.at[idx, 'bus_1'] = bus1
         
         ##for validating
         lines.at[idx, 'bus_0'] = bus0
@@ -566,7 +564,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     for idx, bus in trafo_buses.iterrows():
         lv_bus = bus.name               
         ms_bus = f"{lv_bus}_MS"         #dummy bus for now
-        s_nom = bus.trafo_cap / 1e3
+        s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
         
         n.add("Bus",
               name=ms_bus,
@@ -682,7 +680,7 @@ def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_fold
         buses.to_file('results/grid_buses_test.shp')
         lines.to_file('results/grid_lines_test.shp')
     fix_grid_infrastructure(n)
-    n = open_LV_circle(n, 'line_163')
+    #n = open_LV_circle(n, 'line_163')
     
     return n
     
