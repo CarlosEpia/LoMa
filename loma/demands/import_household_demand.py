@@ -28,7 +28,7 @@ def create_profile_pool_from_df(profil_type, profiles_df, limit=1):
     
     return profile
 
-def distribute_household_demand(n, profile_dist, household_count):
+def distribute_household_demand(n, profile_dist):
     
     """
     
