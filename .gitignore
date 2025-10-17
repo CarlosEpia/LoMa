@@ -1,0 +1,7 @@
+data/
+test_*.shp
+test_*.dbf
+test_*.shx
+test_*.prj
+test_*.cpg
+*.pyc
