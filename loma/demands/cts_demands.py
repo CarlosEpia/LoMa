@@ -42,14 +42,14 @@ def assign_cts_demand_to_buses(network, cts_demands):
     cts_demands = gpd.sjoin_nearest(
         cts_demands, buses, "left", distance_col="distance"
     )
-    cts_demands = cts_demands[cts_demands["distance"] < 1000]
+    cts_demands = cts_demands[cts_demands["distance"] < 150]
 
     # ######## ONLY FOR VALIDATION PURPOSES ###############
 
-    # cts_demands[["geom", "Bus", "distance"]].to_file(
-    #     "/home/carlos/LoMa/validation/cts_demands.shp"
-    # )
-    # buses.to_file("/home/carlos/LoMa/validation/buses.shp")
+    cts_demands[["geom", "Bus", "distance"]].to_file(
+         "/home/student/Documents/LoMa/Validation/cts_demands.shp"
+    )
+    buses.to_file("/home/student/Documents/LoMa/Validation/buses.shp")
 
     # #####################################################
 
