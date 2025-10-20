@@ -18,9 +18,10 @@ import pypsa
 from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Point
 from shapely.strtree import STRtree
-from demands.import_hp_demand import check_heat_pumps
-from demands.household_count import count_households_per_bus_input_file
-from demands.household_count import count_households_per_bus_census_data
+
+from loma.demands.import_hp_demand import check_heat_pumps
+from loma.demands.household_count import count_households_per_bus_input_file
+from loma.demands.household_count import count_households_per_bus_census_data
 
 
 
