@@ -22,6 +22,7 @@ from loma.constraints.constraints import load_reduction_constraint_14a
 from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
     insert_pv_rooftop_and_battery,
 )
+from loma.MGB_Model_into_ding0_shape import prepare_ding0_shape_export
 
 args = {
     "path_to_shapefiles_grid": "data/Input_files/shape_files_grid",  # define path of shapefiles for grid infrastructure (related to execution folder)
@@ -101,5 +102,10 @@ n.optimize(
     solver_name="glpk",
     extra_functionality=load_reduction_constraint_14a,
 )
+
+
+#export model into ding0_shape ####
+#### define own export_folder in arguments of the functions
+prepare_ding0_shape_export(n, '/home/student/Execution/LoMa_exe/results/MGB_model')
 
 
