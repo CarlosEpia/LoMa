@@ -28,11 +28,14 @@ def create_profile_pool_from_df(profil_type, profiles_df, limit=1):
     
     return profile
 
-def distribute_household_demand(n, profile_dist):
+def distribute_household_demand(n, profile_dist, random_seed=42):
     
     """
     
     """
+    #define seed
+    np.random.seed(random_seed)
+    
     # Load profile pool from HDF file
     pool = pd.read_hdf('data/data_bundle/hh_el_load_profiles_100k.hdf')
 
@@ -54,7 +57,6 @@ def distribute_household_demand(n, profile_dist):
     # Dictionary to collect all load time series before concatenation
     new_profiles = {}
     
-
     # Iterate over all house connection buses
     for bus_name, bus in n.buses[n.buses.comp_type == 'house_connection'].iterrows():
         x, y = bus.x, bus.y

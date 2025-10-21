@@ -103,7 +103,7 @@ def parse_bus_numbers(hn_entry):
 
 
     
-def count_households_per_bus_input_file(buses, path, threshold=90):
+def count_households_per_bus_input_file(buses, path, threshold=80):
     # load households
     q_households = pd.read_csv(path)
     
@@ -131,7 +131,7 @@ def count_households_per_bus_input_file(buses, path, threshold=90):
         best_match, score, _ = process.extractOne(street, street_choices, scorer=fuzz.ratio)
         if score < threshold:
             print(street, 'übersprungen')
-            continue  # kein brauchbarer Match
+            continue  # kein aktzeptables Match
         
         # filter buses on that street
         street_buses = buses[mask_house_conn & (buses['Straße'] == best_match)]
