@@ -39,13 +39,23 @@ def create_gdf_from_shape(input_folder):
 
     """
     
-    LV_lines = gpd.read_file(os.path.join(input_folder, "Gis NSP Kabelabschnitt Verlauf.shp"))
-    MV_lines = gpd.read_file(os.path.join(input_folder, "Gis MSP Kabelabschnitt Verlauf.shp"))
-    HA_lines = gpd.read_file(os.path.join(input_folder, "Gis NSP HA Abschnitt Verlauf.shp"))
-    HA_Bus = gpd.read_file(os.path.join(input_folder, "Gis NSP HA Kasten Position.shp"))
-    distributors = gpd.read_file(os.path.join(input_folder, "Gis ST Kabelverteiler Position.shp"))
-    joints = gpd.read_file(os.path.join(input_folder, "Gis NSP Muffe Position.shp"))
-    MVLV_trafos = gpd.read_file(os.path.join(input_folder, "Gis ST Station Position.shp"))
+    def safe_read(path):
+        """Safely read a shapefile; return empty GeoDataFrame if not found."""
+        if os.path.exists(path):
+            return gpd.read_file(path)
+        else:
+            print(f"⚠️  File not found: {os.path.basename(path)} — skipping.")
+            return gpd.GeoDataFrame()
+
+    # --- try reading all files (some might not exist) ---
+    LV_lines = safe_read(os.path.join(input_folder, "Gis NSP Kabelabschnitt Verlauf.shp"))
+    MV_lines = safe_read(os.path.join(input_folder, "Gis MSP Kabelabschnitt Verlauf.shp"))
+    HA_lines = safe_read(os.path.join(input_folder, "Gis NSP HA Abschnitt Verlauf.shp"))
+    HA_Bus = safe_read(os.path.join(input_folder, "Gis NSP HA Kasten Position.shp"))
+    distributors = safe_read(os.path.join(input_folder, "Gis ST Kabelverteiler Position.shp"))
+    joints = safe_read(os.path.join(input_folder, "Gis NSP Muffe Position.shp"))
+    MVLV_trafos = safe_read(os.path.join(input_folder, "Gis ST Station Position.shp"))
+
     
     #rename columns to generalize the names
     for df in [HA_Bus, distributors, joints]:
@@ -56,9 +66,10 @@ def create_gdf_from_shape(input_folder):
     
     # component-type-column for distinguish the components
     LV_lines["comp_type"] = "lv_line"
-    MV_lines["comp_type"] = "mv_line"
+    if not MV_lines.empty:
+        MV_lines["comp_type"] = "mv_line"
     HA_lines["comp_type"] = "hc_line"
-    joints["comp_type"] = joints.ART
+    joints["comp_type"] = joints.ART   ##ToDo: Generalize for usage in other regions than husum
     distributors["comp_type"] = "distributor"
     MVLV_trafos["comp_type"] = "trafo"
     HA_Bus["comp_type"] = "house_connection"
@@ -78,13 +89,9 @@ def create_gdf_from_shape(input_folder):
     
     #secure same crs
     target_crs = "EPSG:32632"
-    joints_clean = joints_clean.to_crs(target_crs)
-    distributors_clean = distributors_clean.to_crs(target_crs)
-    HA_Bus_clean = HA_Bus_clean.to_crs(target_crs)
-    MVLV_trafos_clean = MVLV_trafos_clean.to_crs(target_crs)
-    LV_lines = LV_lines.to_crs(target_crs)
-    MV_lines = MV_lines.to_crs(target_crs)
-    HA_lines = HA_lines.to_crs(target_crs)
+    for gdf in [LV_lines, MV_lines, HA_lines, joints_clean, distributors_clean, HA_Bus_clean, MVLV_trafos_clean]:
+        if not gdf.empty:
+            gdf.set_crs(target_crs, inplace=True, allow_override=True)
     
     # combine all bus-datfarmes
     buses = pd.concat([joints_clean, distributors_clean, MVLV_trafos_clean, HA_Bus_clean], ignore_index=True)
@@ -95,7 +102,8 @@ def create_gdf_from_shape(input_folder):
     MV_lines['KABELTYP'] = None    ###Delete when KABElTYP is part of shape file attributes
     line_columns = ['comp_type', 'KABELTYP', 'geometry']  
     #combine all line-dataframes
-    lines = pd.concat([LV_lines[line_columns], MV_lines[line_columns], HA_lines[line_columns]], ignore_index=True)
+    lines_list = [df for df in [LV_lines, MV_lines, HA_lines] if not df.empty]
+    lines = pd.concat([df[line_columns] for df in lines_list], ignore_index=True)
     lines["line_id"] = [f"line_{i}" for i in range(len(lines))]
     lines = lines.reset_index(drop=True)
     
@@ -149,9 +157,11 @@ def merge_connected_mv_lines(lines, tolerance=0.001):
 
         # Fertige gemergte Linie speichern
         merged_lines.append({**base_attrs, 'geometry': base_geom})
-
-    merged_gdf = gpd.GeoDataFrame(merged_lines, geometry='geometry', crs=lines.crs)
     
+    if len(merged_lines) > 0:
+        merged_gdf = gpd.GeoDataFrame(merged_lines, geometry='geometry', crs=lines.crs)
+    else:
+        merged_gdf = gpd.GeoDataFrame(columns=lines.columns, geometry='geometry', crs=lines.crs)
     #add adjusted mv_lines in original dataframe
     lines = lines[lines.comp_type!='mv_line']
     lines = pd.concat([lines, merged_gdf], ignore_index=True)
