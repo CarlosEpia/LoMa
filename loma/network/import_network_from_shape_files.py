@@ -24,7 +24,7 @@ from loma.demands.import_hp_demand import check_heat_pumps
 from loma.demands.household_count import count_households_per_bus_input_file
 from loma.demands.household_count import count_households_per_bus_census_data
 
-
+input_folder = 'data/Input_files/shape_files_grid_V2'
 
 def create_gdf_from_shape(input_folder):
     """
@@ -54,7 +54,7 @@ def create_gdf_from_shape(input_folder):
     HA_Bus = safe_read(os.path.join(input_folder, "Gis NSP HA Kasten Position.shp"))
     distributors = safe_read(os.path.join(input_folder, "Gis ST Kabelverteiler Position.shp"))
     joints = safe_read(os.path.join(input_folder, "Gis NSP Muffe Position.shp"))
-    MVLV_trafos = safe_read(os.path.join(input_folder, "Gis ST Station Position.shp"))
+    MVLV_trafos = safe_read(os.path.join(input_folder, "Gis ST Station Fläche.shp"))
 
     
     #rename columns to generalize the names
@@ -91,7 +91,7 @@ def create_gdf_from_shape(input_folder):
     target_crs = "EPSG:32632"
     for gdf in [LV_lines, MV_lines, HA_lines, joints_clean, distributors_clean, HA_Bus_clean, MVLV_trafos_clean]:
         if not gdf.empty:
-            gdf.set_crs(target_crs, inplace=True, allow_override=True)
+            gdf.to_crs(target_crs, inplace=True)
     
     # combine all bus-datfarmes
     buses = pd.concat([joints_clean, distributors_clean, MVLV_trafos_clean, HA_Bus_clean], ignore_index=True)
@@ -445,7 +445,32 @@ def map_load_bus_to_network_bus(buses, lines):
     return filtered_buses
 
 
+def get_nearest_bus_robust(point, bus_gdf, k=5):
+    """
+    Find the nearest bus (Point or Polygon) to start_point.
+    Returns bus row and exact distance to geometry.
+    """
 
+    if bus_gdf.empty:
+        return None, np.inf
+
+    # 1. KDTree über Centroids (für schnelle Vorauswahl)
+    coords = np.array([[geom.centroid.x, geom.centroid.y] for geom in bus_gdf.geometry])
+    tree = cKDTree(coords)
+
+    # k nächste Kandidaten
+    _, idxs = tree.query([point.x, point.y], k=min(k, len(bus_gdf)))
+
+    # 2. exakte Distanz zur Geometrie berechnen
+    candidates = bus_gdf.iloc[idxs].copy()
+    candidates["dist_to_point"] = candidates.geometry.apply(lambda g: point.distance(g))
+
+    # 3. nächsten Bus auswählen
+    min_idx = candidates["dist_to_point"].idxmin()
+    nearest_bus = candidates.loc[min_idx, 'bus_id']
+    nearest_distance = candidates.loc[min_idx, 'dist_to_point']
+
+    return nearest_bus, nearest_distance
 
 
 def get_nearest_bus(point, bus_tree, buses_df):
@@ -478,11 +503,12 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     """
     
     # import buses
+    buses["centroid"] = buses.geometry.centroid
     for _, row in buses.iterrows():
         n.add("Bus",
           row["bus_id"],
-          x=row.geometry.x,
-          y=row.geometry.y)
+          x=row.centroid.x,
+          y=row.centroid.y)
         n.buses.at[row["bus_id"], 'comp_type'] = row['comp_type']
         n.buses.at[row["bus_id"], 'household_count'] = row['household_count']
         n.buses.at[row["bus_id"], 'HP'] = row['HP']
@@ -499,43 +525,50 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
         #relevant_buses = relevant_buses.reset_index(drop=True)
         relevant_buses = buses
     
-        bus_coords = np.array([[geom.x, geom.y] for geom in relevant_buses.geometry])
+        bus_coords = np.array([[geom.centroid.x, geom.centroid.y] for geom in relevant_buses.geometry])
         bus_tree = cKDTree(bus_coords)
     
         # Starte mit allen relevanten Bussen
-        bus0, dist0 = get_nearest_bus(start_point, bus_tree, relevant_buses)
-        bus1, dist1 = get_nearest_bus(end_point, bus_tree, relevant_buses)
+        bus0, dist0 = get_nearest_bus_robust(start_point, buses)
+        bus1, dist1 = get_nearest_bus_robust(end_point, buses)
         
-        # if closest bus not directly next to the start/endpoint connect trafo/distributor bus
-        if 10 > dist0 > 0.4 :#and row['comp_type']=='lv_line':
-            #print('##### line connecting to trafo/dist ############', 'Line:', idx)
+        # If nearest bus is not directly next to line end/start, search for close distributor/trafo
+        if 10 > dist0 > 0.1:
             traf_dist_buses = buses[buses.comp_type.isin(['distributor', 'trafo'])].reset_index(drop=True)
-            traf_dist_coords = np.array([[geom.x, geom.y] for geom in traf_dist_buses.geometry])
-            traf_dist_tree = cKDTree(traf_dist_coords)
-            bus0, dist0 = get_nearest_bus(start_point, traf_dist_tree, traf_dist_buses)
-            if dist0 >= 10:
-                print(f"line {row['line_id']} skipped cause no bus nearby at beginning of the line")
-                continue          
+            traf_bus, traf_dist = get_nearest_bus_robust(start_point, traf_dist_buses)    
+            # just use if trafo/distributor is nearby
+            if traf_dist < 10:
+                bus0, dist0 = traf_bus, traf_dist
+            else:
+                if row['comp_type'] != 'mv_line':
+                    bus0, dist0 = get_nearest_bus_robust(start_point, buses)
+                    print(f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead.")  
+                else: 
+                    print(f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line.")
+                    continue
         elif dist0 >= 10:
-            print(f"line {row['line_id']} skipped cause no bus nearby at beginning of the line")
+            # If no nearby bus at all, skip that line
+            print(f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line.")
             continue
     
-        if 10 > dist1 > 0.4 :#and row['comp_type']=='lv_line':
-            #print('##### line connecting to trafo/dist ############', 'Line:', idx)
+        if 10 > dist1 > 0.1:
             traf_dist_buses = buses[buses.comp_type.isin(['distributor', 'trafo'])].reset_index(drop=True)
-            traf_dist_coords = np.array([[geom.x, geom.y] for geom in traf_dist_buses.geometry])
-            traf_dist_tree = cKDTree(traf_dist_coords)
-            bus1, dist1 = get_nearest_bus(end_point, traf_dist_tree, traf_dist_buses)
-            if dist1 >= 10:
-                print(f"line {row['line_id']} skipped cause no bus nearby at beginning of the line")
-                continue            
+            traf_bus, traf_dist = get_nearest_bus_robust(end_point, traf_dist_buses)    
+            # just use if trafo/distributor is nearby
+            if traf_dist < 10:
+                bus1, dist1 = traf_bus, traf_dist
+            else:
+               if row['comp_type'] != 'mv_line':
+                   bus1, dist1 = get_nearest_bus_robust(end_point, buses)
+                   print(f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead.")  
+               else: 
+                   print(f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line.")
+                   continue    
         elif dist1 >= 10:
-            print(f"line {row['line_id']} skipped cause no bus nearby at end of the line")
+            # If no nearby bus at all, skip that line
+            print(f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line.")
             continue
         
-        if row['line_id'] == 'line_5057':
-            import pdb; pdb.set_trace()
-    
         length_km = line_geom.length / 1000
         cable_type = row['KABELTYP']
         if cable_type in cable_types:
@@ -684,10 +717,11 @@ def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_fold
     buses, lines = import_grid_infrastructure(n, buses, split_lines, cable_types, household_count) 
     if export_shape_files:
         os.makedirs('results', exist_ok=True)
+        buses = buses.drop(columns=['geometry'])
         buses.to_file('results/grid_buses_test.shp')
         lines.to_file('results/grid_lines_test.shp')
     fix_grid_infrastructure(n)
-    #n = open_LV_circle(n, 'line_163')
+    n = open_LV_circle(n, 'line_163')
     
     return n
     
