@@ -27,7 +27,7 @@ def insert_heat_pump_flexibilities_14a(n):
                   carrier = "14a",
                   p_nom=p_max,
                   p_max_pu=p_gen_14a / p_gen_14a.max(),
-                  marginal_cost=10000,   # high value, that generator is used only if line capacity is not enough
+                  marginal_cost=200,   # high value, that generator is used only if line capacity is not enough
                   overwrite=True
                   )
             
