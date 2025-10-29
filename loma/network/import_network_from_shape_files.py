@@ -544,10 +544,10 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
            x = 0.05
            s_nom = 1
          
-        capital_costs = 100_000*length_km/s_nom
+        capital_costs = 1e12 #100_000*length_km/s_nom
            
         n.add("Line", row['line_id'], bus0=bus0, bus1=bus1, carrier='AC',
-              length=length_km, r=r, x=x, s_nom=s_nom, s_nom_min = s_nom, capital_cost = capital_costs)
+              length=length_km, r=r, x=x, s_nom=s_nom, s_nom_min = s_nom, capital_cost = capital_costs, s_nom_extendable=True)
         n.lines.at[row["line_id"], 'comp_type'] = row['comp_type']
         n.lines.at[row["line_id"], 'geom'] = row['geometry']
         n.lines.at[row["line_id"], 'cable_type'] = row['KABELTYP']
@@ -581,7 +581,8 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
               bus1=lv_bus,   
               x=0.03864647477581,        #example vlaues from dingo
               r=0.0103174603174603,
-              s_nom=s_nom)
+              s_nom=s_nom,
+              s_nom_extendable=True)
         
         # 3. Generator am MS-Bus anschließen
         n.add("Generator", 
