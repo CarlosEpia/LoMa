@@ -49,9 +49,6 @@ def load_reduction_constraint_14a(n, snapshots):
                 name=f"max2h_per_day_{gen}_{day}"
             )
 
-
-
-
     """
     Adds constraints to ensure:
     - SOC is cyclic every 24h and at the end.
