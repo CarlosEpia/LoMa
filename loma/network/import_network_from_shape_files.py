@@ -657,7 +657,7 @@ def fix_grid_infrastructure(n, min_size=10):
         print("⚠️ This lines will be deleted.")
         n.mremove("Line", loop_lines.index.tolist())
     
-    # 2️⃣ Lösche unverbundene Busse (ohne Subnetz)
+    # Lösche unverbundene Busse (ohne Subnetz)
     line_buses = pd.concat([n.lines.bus0, n.lines.bus1]).unique()
     connected_transformers = n.transformers[
         n.transformers.bus0.isin(line_buses) | n.transformers.bus1.isin(line_buses)
@@ -684,8 +684,8 @@ def fix_grid_infrastructure(n, min_size=10):
                 print(f"⚠️ Remove {len(to_remove)} {comp}(s) at unconnected buses")
                 n.mremove(comp, to_remove)
     
-    # 3️⃣ Erkenne Subnetzwerke
-    G = n.graph()  # PyPSA Graph inkl. Links und Transformatoren
+    # Erkenne Subnetzwerke
+    G = n.graph()  
     components = list(nx.connected_components(G))
     
     for comp in components:
