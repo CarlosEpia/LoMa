@@ -19,6 +19,7 @@ from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Point
 from shapely.strtree import STRtree
 from shapely.ops import linemerge, unary_union
+import networkx as nx
 
 from loma.demands.import_hp_demand import check_heat_pumps
 from loma.demands.household_count import count_households_per_bus_input_file
@@ -648,44 +649,64 @@ def open_LV_circle(n, lv_line_idx):
     return n
 
 
-             
-def fix_grid_infrastructure(n):
-    #delete loop lines
-    loop_lines = n.lines[n.lines.bus0==n.lines.bus1]
-    print(f" ⚠️ Warning: Following lines have same bus0 and bus1: {loop_lines[['bus0', 'bus1']]}")
-    print("⚠️ Warning: This lines will be deleted from the network")
-    n.mremove("Line", loop_lines.index.tolist())
+def fix_grid_infrastructure(n, min_size=10):
+    # Delete loop lines
+    loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
+    if not loop_lines.empty:
+        print(f"⚠️ Loop lines (bus0==bus1) found:\n{loop_lines[['bus0', 'bus1']]}")
+        print("⚠️ This lines will be deleted.")
+        n.mremove("Line", loop_lines.index.tolist())
     
-    #delete unconnected buses
+    # 2️⃣ Lösche unverbundene Busse (ohne Subnetz)
     line_buses = pd.concat([n.lines.bus0, n.lines.bus1]).unique()
     connected_transformers = n.transformers[
         n.transformers.bus0.isin(line_buses) | n.transformers.bus1.isin(line_buses)
     ]
-    con_buses = pd.concat([n.lines.bus0, n.lines.bus1, connected_transformers.bus1, connected_transformers.bus0]).unique().tolist()
+    con_buses = pd.concat([n.lines.bus0, n.lines.bus1,
+                           connected_transformers.bus0, connected_transformers.bus1]).unique()
+    
     uncon_buses = n.buses[~n.buses.index.isin(con_buses)]
-    #filter out connected buses via transformator 
-    
-    print(f" ⚠️ Warning: Following buses are not connected to the network: {uncon_buses}")
-    print("⚠️ Warning: This buses and connected components will be deleted from the network")
-    n.mremove("Bus", uncon_buses.index.tolist())
-    
-    components_to_clean = ["Generator", "Transformer"]#, "Load"]  # list extendable
-
-    for comp in components_to_clean:
-
-        df = n.df(comp)
-        # Check if the component is a 'Transformer'
-        if comp == "Transformer":
-            # For Transformers, check both bus0 and bus1
-            to_remove = df[df.bus0.isin(uncon_buses.index) | df.bus1.isin(uncon_buses.index)].index.tolist()
-        else:
-            # For other components like 'Generator', use the 'bus' column
-            to_remove = df[df.bus.isin(uncon_buses.index)].index.tolist()
+    if not uncon_buses.empty:
+        print(f"⚠️ Found not connected busses:\n{uncon_buses.index.tolist()}")
+        print("⚠️ Buses and according components will be deleted.")
+        n.mremove("Bus", uncon_buses.index.tolist())
         
-        if to_remove:
-            print(f"⚠️ Removing {len(to_remove)} {comp}(s) connected to unconnected buses")
-            n.mremove(comp, to_remove)
+        # Lösche alle Komponenten, die an unverbundenen Bussen hängen
+        for comp in ["Generator", "Transformer", "Load", "StorageUnit", "Link"]:
+            df = n.df(comp)
+            if comp == "Transformer":
+                to_remove = df[df.bus0.isin(uncon_buses.index) | df.bus1.isin(uncon_buses.index)].index.tolist()
+            elif comp == "Link":
+                to_remove = df[df.bus0.isin(uncon_buses.index) | df.bus1.isin(uncon_buses.index)].index.tolist()
+            else:
+                to_remove = df[df.bus.isin(uncon_buses.index)].index.tolist()
+            if to_remove:
+                print(f"⚠️ Remove {len(to_remove)} {comp}(s) at unconnected buses")
+                n.mremove(comp, to_remove)
     
+    # 3️⃣ Erkenne Subnetzwerke
+    G = n.graph()  # PyPSA Graph inkl. Links und Transformatoren
+    components = list(nx.connected_components(G))
+    
+    for comp in components:
+        if len(comp) < min_size:
+            print(f"⚠️ Small subnetwork with {len(comp)} Buses found: {sorted(list(comp))[:5]} ...")
+            # Lösche alle Busse im Subnetz
+            n.mremove("Bus", list(comp))
+            # Lösche alle Komponenten, die an diesen Bussen hängen
+            for comp_name in ["Generator", "Transformer", "Load", "StorageUnit", "Link", "Line"]:
+                df = n.df(comp_name)
+                if comp_name in ["Transformer", "Link", "Line"]:
+                    to_remove = df[df.bus0.isin(comp) | df.bus1.isin(comp)].index.tolist()
+                else:
+                    to_remove = df[df.bus.isin(comp)].index.tolist()
+                if to_remove:
+                    print(f"⚠️ Remove {len(to_remove)} {comp_name}(s) inside of the subnetwork")
+                    n.mremove(comp_name, to_remove)
+        else:
+            print(f"⚠️ Main Subnetwork with {len(comp)} Buses found – will be maintained.")
+    
+    print("✅ Infrastructure of network is fixed.")
     
 def import_ev_chargers(n):
     
@@ -721,7 +742,7 @@ def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_fold
         buses.to_file('results/grid_buses_test.shp')
         lines.to_file('results/grid_lines_test.shp')
     fix_grid_infrastructure(n)
-    n = open_LV_circle(n, 'line_163')
+    #n = open_LV_circle(n, 'line_163')
     
     return n
     

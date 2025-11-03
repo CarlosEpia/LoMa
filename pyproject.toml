@@ -27,5 +27,6 @@ dependencies = [
   "tables",
   "glpk",
   "rapidfuzz",
+  "networkx",
 ]
 dynamic = []
