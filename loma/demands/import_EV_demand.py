@@ -216,7 +216,7 @@ def import_EV_demands(n, *, factor=1.0, e_nom_par14_store=1.0, master_seed=42,
               efficiency=np.sqrt(charge_efficiency),
               )
     
-    # ############## OPTIONAL EXPORT TO CHECK RESULTS ##############
+    # ############### OPTIONAL EXPORT TO CHECK RESULTS ###############
     # # Exportiere ev_profiles_df, falls gewünscht
     # if export_profiles:
     #     os.makedirs(export_path, exist_ok=True)
@@ -236,6 +236,6 @@ def import_EV_demands(n, *, factor=1.0, e_nom_par14_store=1.0, master_seed=42,
     #         print(f"{load_name}: Zeitprofil mit {len(p)} Zeitpunkten, peak={p.max():.4f} MW at {p.idxmax()}")
     #     else:
     #         print(f"{load_name}: statischer p_set = {p}")
-    # ##############################################################
+    # ################################################################
 
     return n
