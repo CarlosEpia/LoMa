@@ -59,16 +59,6 @@ def check_heat_pumps(buses, input_path):
             if not found:
                 print(f"Warning: No Match found for Heat_pump in {street} {num_list}")
                 
-            ########## check if an fallback option is neccessary for other LV-Region
-
-            # Fallback: just compare number without letter
-            # number_matches = street_buses[
-            # street_buses['parsed_numbers'].apply(lambda nums: any(n == num for n, _ in nums))
-            # ]
-            # if not number_matches.empty:
-            #  buses.loc[number_matches.index, 'house_count'] += 1
-            # continue
-   
     else:
         print("CSV input not found. Using fallback shapefile 'hp_2035.shp'.")
 
