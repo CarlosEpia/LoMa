@@ -5,69 +5,120 @@ Created on Wed Aug 20 10:27:02 2025
 
 @author: student
 """
+import os
 import pandas as pd
 import geopandas as gpd
-import re
 import numpy as np
 
-from loma.demands.household_count import parse_bus_numbers, hausnummer_split
+from loma.demands.household_count import parse_bus_numbers
 
 
 def check_heat_pumps(buses, input_path):
+    """
+    Assigns Heat Pumps to buses based on input CSV or fallback shapefile.
 
-    hp_df = pd.read_csv("data/Input_files/heat_pumps.csv")
-    buses = buses.rename(
-        columns={"HAUSNUMMER": "Hausnummer", "Strasse": "Straße"}
-    )
+    Priority:
+    1. If 'heat_pumps.csv' exists, use it.
+    2. Otherwise, use 'hp_2035.shp' fallback.
+    """
+
     con_buses = buses[buses.comp_type == "house_connection"].copy()
-    con_buses["Straße"] = con_buses["Straße"].str.replace("Strasse", "Straße")
-    con_buses["parsed_numbers"] = con_buses["Hausnummer"].apply(
-        parse_bus_numbers
-    )
-    hp_df["parsed_numbers"] = hp_df["Hnr."].apply(parse_bus_numbers)
+    con_buses["HP"] = 0  # Initialize HP column
 
-    # create Heat_pump column
-    con_buses["HP"] = 0
-    hp_df = hp_df[hp_df.WP == "ja"]
+    csv_path = input_path
+    folder = os.path.dirname(input_path)
+    
+    if os.path.isfile(csv_path):  # Use CSV if available
+        hp_df = pd.read_csv(csv_path)
+        buses = buses.rename(columns={"HAUSNUMMER": "Hausnummer", "Strasse": "Straße"})
+        con_buses["Straße"] = con_buses["Straße"].str.replace("Strasse", "Straße")
+        con_buses["parsed_numbers"] = con_buses["Hausnummer"].apply(parse_bus_numbers)
+        hp_df["parsed_numbers"] = hp_df["Hnr."].apply(parse_bus_numbers)
 
-    for idx, row in hp_df.iterrows():
-        street = row["Straße"]
-        num_list = row["parsed_numbers"]
-        street_buses = con_buses[con_buses.Straße == street]
+        hp_df = hp_df[hp_df.WP == "ja"]
 
-        if len(num_list) == 0:
-            continue
-        if street_buses.empty:
-            continue
+        for idx, row in hp_df.iterrows():
+            street = row["Straße"]
+            num_list = row["parsed_numbers"]
+            street_buses = con_buses[con_buses.Straße == street]
 
-        # 1) try to find exact match (Number, letter))
-        found = False
-        for num in num_list:
-            exact_matches = street_buses[
-                street_buses.parsed_numbers.apply(lambda nums: num in nums)
-            ]
+            if len(num_list) == 0 or street_buses.empty:
+                continue
 
-            if not exact_matches.empty:
-                con_buses.loc[exact_matches.index, "HP"] = 1
-                found = True
-                break
+            # 1) try to find exact match (Number, letter))
+            found = False
+            for num in num_list:
+                exact_matches = street_buses[
+                    street_buses.parsed_numbers.apply(lambda nums: num in nums)
+                ]
+                if not exact_matches.empty:
+                    con_buses.loc[exact_matches.index, "HP"] = 1
+                    found = True
+                    break
 
-        if not found:
-            print(
-                f"Warning: No Match found for Heat_pump in {street} {num_list}"
+            if not found:
+                print(f"Warning: No Match found for Heat_pump in {street} {num_list}")
+                
+            ########## check if an fallback option is neccessary for other LV-Region
+
+            # Fallback: just compare number without letter
+            # number_matches = street_buses[
+            # street_buses['parsed_numbers'].apply(lambda nums: any(n == num for n, _ in nums))
+            # ]
+            # if not number_matches.empty:
+            #  buses.loc[number_matches.index, 'house_count'] += 1
+            # continue
+   
+    else:
+        print("CSV input not found. Using fallback shapefile 'hp_2035.shp'.")
+
+        shp_path = os.path.join(folder, "hp_husum_2035", "hp_2035.shp")  # 
+
+        if not os.path.isfile(shp_path):
+            raise FileNotFoundError(
+                f"Neither CSV nor fallback shapefile found.\n"
+                f"Missing:\n  - {csv_path}\n  - {shp_path}"
             )
 
-        ########## check if an fallback option is neccessary for other LV-Region
+        fallback_hp = gpd.read_file(shp_path)
+        fallback_hp = fallback_hp.rename(
+            columns={"building_i": "building_id", "hp_capacit": "hp_capacity"}
+        )
 
-        # Fallback: just compare number without letter
-        # number_matches = street_buses[
-        # street_buses['parsed_numbers'].apply(lambda nums: any(n == num for n, _ in nums))
-        # ]
-        # if not number_matches.empty:
-        #  buses.loc[number_matches.index, 'house_count'] += 1
-        # continue
+        # Convert buses to GeoDataFrame
+        bus_gdf = gpd.GeoDataFrame(
+            con_buses,
+            geometry=gpd.points_from_xy(con_buses.geometry.x, con_buses.geometry.y),
+            crs=fallback_hp.crs
+        )
+
+        # Spatial nearest join to assign HP
+        bus_with_hp = gpd.sjoin_nearest(
+            bus_gdf,
+            fallback_hp[["geometry", "hp_capacity"]],
+            how="left"
+        )
+
+        # Assign HP flag where fallback capacity > 0
+        bus_with_hp["HP"] = (bus_with_hp["hp_capacity"].fillna(0) > 0).astype(int)
+        bus_with_hp["hp_capacity"] = bus_with_hp["hp_capacity"].fillna(0)
+
+        # Merge back into main con_buses
+        con_buses["HP"] = bus_with_hp["HP"].values
+        con_buses["hp_capacity"] = bus_with_hp["hp_capacity"].values  # <<< Added
+
+    # Update full buses dataframe
     hp_bus_ids = con_buses[con_buses.HP == 1].bus_id.to_list()
     buses["HP"] = buses["bus_id"].isin(hp_bus_ids).astype(int)
+
+    # Add capacity column if fallback was used
+    if "hp_capacity" in con_buses.columns:  
+        buses = buses.merge(
+            con_buses[["bus_id", "hp_capacity"]],
+            on="bus_id",
+            how="left"
+        )
+        buses["hp_capacity"] = buses["hp_capacity"].fillna(0)
 
     return buses
 
