@@ -655,7 +655,7 @@ def fix_grid_infrastructure(n, min_size=10):
     if not loop_lines.empty:
         print(f"⚠️ Loop lines (bus0==bus1) found:\n{loop_lines[['bus0', 'bus1']]}")
         print("⚠️ This lines will be deleted.")
-        n.mremove("Line", loop_lines.index.tolist())
+        n.remove("Line", loop_lines.index.tolist())
     
     # Lösche unverbundene Busse (ohne Subnetz)
     line_buses = pd.concat([n.lines.bus0, n.lines.bus1]).unique()
@@ -669,7 +669,7 @@ def fix_grid_infrastructure(n, min_size=10):
     if not uncon_buses.empty:
         print(f"⚠️ Found not connected busses:\n{uncon_buses.index.tolist()}")
         print("⚠️ Buses and according components will be deleted.")
-        n.mremove("Bus", uncon_buses.index.tolist())
+        n.remove("Bus", uncon_buses.index.tolist())
         
         # Lösche alle Komponenten, die an unverbundenen Bussen hängen
         for comp in ["Generator", "Transformer", "Load", "StorageUnit", "Link"]:
@@ -682,7 +682,7 @@ def fix_grid_infrastructure(n, min_size=10):
                 to_remove = df[df.bus.isin(uncon_buses.index)].index.tolist()
             if to_remove:
                 print(f"⚠️ Remove {len(to_remove)} {comp}(s) at unconnected buses")
-                n.mremove(comp, to_remove)
+                n.remove(comp, to_remove)
     
     # Erkenne Subnetzwerke
     G = n.graph()  
@@ -692,7 +692,7 @@ def fix_grid_infrastructure(n, min_size=10):
         if len(comp) < min_size:
             print(f"⚠️ Small subnetwork with {len(comp)} Buses found: {sorted(list(comp))[:5]} ...")
             # Lösche alle Busse im Subnetz
-            n.mremove("Bus", list(comp))
+            n.remove("Bus", list(comp))
             # Lösche alle Komponenten, die an diesen Bussen hängen
             for comp_name in ["Generator", "Transformer", "Load", "StorageUnit", "Link", "Line"]:
                 df = n.df(comp_name)
@@ -702,7 +702,7 @@ def fix_grid_infrastructure(n, min_size=10):
                     to_remove = df[df.bus.isin(comp)].index.tolist()
                 if to_remove:
                     print(f"⚠️ Remove {len(to_remove)} {comp_name}(s) inside of the subnetwork")
-                    n.mremove(comp_name, to_remove)
+                    n.remove(comp_name, to_remove)
         else:
             print(f"⚠️ Main Subnetwork with {len(comp)} Buses found – will be maintained.")
     

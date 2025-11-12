@@ -21,6 +21,8 @@ def insert_pv_rooftop_and_battery(
 def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path):
     solar = gpd.read_file(pv_rooftop_path).to_crs(32632)
     solar = gpd.clip(solar, shape)
+
+    buses.index.rename("bus", inplace=True)
     solar = gpd.sjoin_nearest(solar, buses, "left", distance_col="distance")
 
     logging.warning(
@@ -30,15 +32,14 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path):
                     """
     )
     solar = solar[solar["distance"] <= 15]
-
     # insert data into network tables
-    solar.rename(columns={"Bus": "bus", "capacity": "p_nom"}, inplace=True)
+    solar.rename(columns={"capacity": "p_nom"}, inplace=True)
     solar["Generator"] = solar.apply(
         lambda b: f"pv_roof_{b.name}_{b.bus}", axis=1
     )
     solar.set_index("Generator", drop=True, inplace=True)
     solar["carrier"] = "solar_rooftop"
-    solar["efficiency_dispatch"] = 0.9
+    solar["efficiency"] = 0.9
 
     for name, row in solar.iterrows():  # Später eingefügt,weiß nicht ob das richtig ist
         network.add(
@@ -47,7 +48,7 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path):
         bus=row["bus"],
         carrier=row["carrier"],
         p_nom=float(row["p_nom"]),
-        efficiency_dispatch=float(row["efficiency_dispatch"]),
+        efficiency=float(row["efficiency"]),
     )
 
 
