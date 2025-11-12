@@ -55,18 +55,19 @@ args = {
 }
 
 
-#household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
-household_dist_df = create_household_dist(args['path_to_shapefile_MV_grid'])
+# household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
+household_dist_df = create_household_dist(args["path_to_shapefile_MV_grid"])
 
-#create pypsa network with grid topology shapefilees
+# create pypsa network with grid topology shapefilees
 n = create_pypsa_network(
-    args['path_to_shapefiles_grid'], 
-    args['path_to_household_data'], 
-    args['path_to_heat_pump_data'], 
-    args['Kabeltypen'], 
-    args['use_census_household_data'], 
-    args['export_shape_files_grid'], 
-    household_dist_df)
+    args["path_to_shapefiles_grid"],
+    args["path_to_household_data"],
+    args["path_to_heat_pump_data"],
+    args["Kabeltypen"],
+    args["use_census_household_data"],
+    args["export_shape_files_grid"],
+    household_dist_df,
+)
 
 # insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
@@ -81,12 +82,12 @@ n = insert_pv_rooftop_and_battery(
 n = distribute_household_demand(n, household_dist_df)
 
 # insert cts demand
-#n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
+# n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
 
 # insert industrial demands
-#n = insert_ind_demand_per_building(
+# n = insert_ind_demand_per_building(
 #    n, args["path_to_shapefile_MV_grid"], args["nuts3_focus_region"]
-#)
+# )
 
 # insert_heat_loas_for_heat_pump_location
 n = add_heat_loads_to_network(n)
@@ -106,8 +107,6 @@ n.optimize(
 )
 
 
-#export model into ding0_shape ####
+# export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
-prepare_ding0_shape_export(n, '/home/student/Execution/LoMa_exe/results/MGB_model')
-
-
+prepare_ding0_shape_export(n, "/home/student/Execution/LoMa_exe/results/MGB_model")
