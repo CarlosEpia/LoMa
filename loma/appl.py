@@ -101,7 +101,7 @@ n = insert_heat_pump_flexibilities_14a(n)
 # Optimize
 n.optimize(
     snapshots=n.snapshots[12:17],
-    solver_name="glpk",
+    solver_name="highs",
     extra_functionality=load_reduction_constraint_14a,
 )
 
