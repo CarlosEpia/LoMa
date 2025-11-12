@@ -130,7 +130,11 @@ def add_heat_loads_to_network(n):
     load_profiles = pd.DataFrame(
         0.0, index=snapshots, columns=bus_with_cell.index
     )
+    
+    #avg heat-demand for calculating a scaling_factor for areas with really low heat_demand due to old census-data
+    avg_hp_capcity = 0.0122 #acccording to "Technology Assessment Report - e-HIGHWAY 2050 , Technofi, 2015"
 
+    
     # Create a profile for each bus
     used_profiles = {}
     for bus_idx, row in bus_with_cell.iterrows():
@@ -184,10 +188,16 @@ def add_heat_loads_to_network(n):
         ).set_index("MESS_DATUM")
         cop_air = calculate_cop_air(temp_air["TT_TU"])
         elec_profile = hourly_profile / cop_air
-
+        import pdb; pdb.set_trace()
+        
+        if elec_profile.max() < 0.0005:
+            scaling_factor = avg_hp_capcity/cop_air/elec_profile.max()
+            elec_profile = elec_profile * scaling_factor
         # Write into matrix
         elec_profile.index = load_profiles.index
         load_profiles.loc[:, bus_idx] = elec_profile[:n_hours]
+        
+        
 
         # Add load to the network
         n.add(
