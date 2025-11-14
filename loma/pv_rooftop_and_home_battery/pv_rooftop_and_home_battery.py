@@ -10,9 +10,7 @@ def insert_pv_rooftop_and_battery(
     shape = gpd.read_file(shape_path).to_crs(32632)
     buses = network.buses.copy()
     buses = gpd.GeoDataFrame(buses, geometry="geom", crs=32632)
-    network = insert_pv_rooftop(
-        network, shape, buses, pv_rooftop_path, pv_feedin_path
-    )
+    network = insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path)
     network = insert_home_battery(network, shape, buses, batteries_path)
 
     return network
@@ -21,6 +19,8 @@ def insert_pv_rooftop_and_battery(
 def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path):
     solar = gpd.read_file(pv_rooftop_path).to_crs(32632)
     solar = gpd.clip(solar, shape)
+
+    buses.index.rename("bus", inplace=True)
     solar = gpd.sjoin_nearest(solar, buses, "left", distance_col="distance")
 
     logging.warning(
@@ -30,26 +30,22 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path):
                     """
     )
     solar = solar[solar["distance"] <= 15]
-
     # insert data into network tables
-    solar.rename(columns={"Bus": "bus", "capacity": "p_nom"}, inplace=True)
-    solar["Generator"] = solar.apply(
-        lambda b: f"pv_roof_{b.name}_{b.bus}", axis=1
-    )
+    solar.rename(columns={"capacity": "p_nom"}, inplace=True)
+    solar["Generator"] = solar.apply(lambda b: f"pv_roof_{b.name}_{b.bus}", axis=1)
     solar.set_index("Generator", drop=True, inplace=True)
     solar["carrier"] = "solar_rooftop"
-    solar["efficiency_dispatch"] = 0.9
+    solar["efficiency"] = 0.9
 
     for name, row in solar.iterrows():  # Später eingefügt,weiß nicht ob das richtig ist
         network.add(
-        "Generator",
-        name=name,
-        bus=row["bus"],
-        carrier=row["carrier"],
-        p_nom=float(row["p_nom"]),
-        efficiency_dispatch=float(row["efficiency_dispatch"]),
-    )
-
+            "Generator",
+            name=name,
+            bus=row["bus"],
+            carrier=row["carrier"],
+            p_nom=float(row["p_nom"]),
+            efficiency=float(row["efficiency"]),
+        )
 
     solar_t = pd.read_csv(
         pv_feedin_path,
@@ -83,9 +79,7 @@ def insert_home_battery(network, shape, buses, batteries_path):
 
     # insert data into network tables
     bat.rename(columns={"Bus": "bus"}, inplace=True)
-    bat["StorageUnit"] = bat.apply(
-        lambda b: f"sto_unit_{b.name}_{b.bus}", axis=1
-    )
+    bat["StorageUnit"] = bat.apply(lambda b: f"sto_unit_{b.name}_{b.bus}", axis=1)
     bat.set_index("StorageUnit", drop=True, inplace=True)
 
     bat["carrier"] = "home_battery"
@@ -96,12 +90,12 @@ def insert_home_battery(network, shape, buses, batteries_path):
 
     for name, row in bat.iterrows():
         network.add(
-        "StorageUnit",
-        name=name,
-        bus=row["bus"],
-        carrier=row["carrier"],
-        p_nom=float(row["p_nom"]),
-        max_hours=float(row["max_hours"]),
-    )
+            "StorageUnit",
+            name=name,
+            bus=row["bus"],
+            carrier=row["carrier"],
+            p_nom=float(row["p_nom"]),
+            max_hours=float(row["max_hours"]),
+        )
 
     return network

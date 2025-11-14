@@ -6,7 +6,7 @@ Created on Thu Jun 19 09:49:16 2025
 @author: student
 """
 
-#ToDo: Create function to add manual buses for certain lines and split lines there 
+# ToDo: Create function to add manual buses for certain lines and split lines there
 
 import os
 from collections import defaultdict
@@ -25,7 +25,8 @@ from loma.demands.import_hp_demand import check_heat_pumps
 from loma.demands.household_count import count_households_per_bus_input_file
 from loma.demands.household_count import count_households_per_bus_census_data
 
-input_folder = 'data/Input_files/shape_files_grid_V2'
+input_folder = "data/Input_files/shape_files_grid_V2"
+
 
 def create_gdf_from_shape(input_folder):
     """
@@ -39,7 +40,7 @@ def create_gdf_from_shape(input_folder):
         contains all potential line-components
 
     """
-    
+
     def safe_read(path):
         """Safely read a shapefile; return empty GeoDataFrame if not found."""
         if os.path.exists(path):
@@ -49,82 +50,112 @@ def create_gdf_from_shape(input_folder):
             return gpd.GeoDataFrame()
 
     # --- try reading all files (some might not exist) ---
-    LV_lines = safe_read(os.path.join(input_folder, "Gis NSP Kabelabschnitt Verlauf.shp"))
-    MV_lines = safe_read(os.path.join(input_folder, "Gis MSP Kabelabschnitt Verlauf.shp"))
+    LV_lines = safe_read(
+        os.path.join(input_folder, "Gis NSP Kabelabschnitt Verlauf.shp")
+    )
+    MV_lines = safe_read(
+        os.path.join(input_folder, "Gis MSP Kabelabschnitt Verlauf.shp")
+    )
     HA_lines = safe_read(os.path.join(input_folder, "Gis NSP HA Abschnitt Verlauf.shp"))
     HA_Bus = safe_read(os.path.join(input_folder, "Gis NSP HA Kasten Position.shp"))
-    distributors = safe_read(os.path.join(input_folder, "Gis ST Kabelverteiler Position.shp"))
+    distributors = safe_read(
+        os.path.join(input_folder, "Gis ST Kabelverteiler Position.shp")
+    )
     joints = safe_read(os.path.join(input_folder, "Gis NSP Muffe Position.shp"))
     MVLV_trafos = safe_read(os.path.join(input_folder, "Gis ST Station Fläche.shp"))
 
-    
-    #rename columns to generalize the names
+    # rename columns to generalize the names
     for df in [HA_Bus, distributors, joints]:
-        df.rename(columns= {'LOKATION_S': 'Straße', 'HAUSNUMMER': 'Hausnummer'}, inplace =True)
+        df.rename(
+            columns={"LOKATION_S": "Straße", "HAUSNUMMER": "Hausnummer"}, inplace=True
+        )
     for df in [MVLV_trafos]:
-        df.rename(columns= {'LOKATION_S': 'Straße', 'HAUSNUMMER': 'Hausnummer', 'TRAFOBELAS': 's_nom'}, inplace =True)
-    
-    
+        df.rename(
+            columns={
+                "LOKATION_S": "Straße",
+                "HAUSNUMMER": "Hausnummer",
+                "TRAFOBELAS": "s_nom",
+            },
+            inplace=True,
+        )
+
     # component-type-column for distinguish the components
     LV_lines["comp_type"] = "lv_line"
     if not MV_lines.empty:
         MV_lines["comp_type"] = "mv_line"
     HA_lines["comp_type"] = "hc_line"
-    joints["comp_type"] = joints.ART   ##ToDo: Generalize for usage in other regions than husum
+    joints["comp_type"] = (
+        joints.ART
+    )  ##ToDo: Generalize for usage in other regions than husum
     distributors["comp_type"] = "distributor"
     MVLV_trafos["comp_type"] = "trafo"
     HA_Bus["comp_type"] = "house_connection"
-    
+
     ##buses
-    bus_columns = ['comp_type', 'Straße', 'Hausnummer', 'geometry']
-    trafo_columns = ['comp_type', 'Straße', 'Hausnummer', 's_nom', 'geometry']
+    bus_columns = ["comp_type", "Straße", "Hausnummer", "geometry"]
+    trafo_columns = ["comp_type", "Straße", "Hausnummer", "s_nom", "geometry"]
+
     def ensure_columns(df, columns):
         for col in columns:
             if col not in df.columns:
                 df[col] = np.nan  # oder np.nan
         return df[columns]
+
     joints_clean = ensure_columns(joints, bus_columns)
     distributors_clean = ensure_columns(distributors, bus_columns)
     MVLV_trafos_clean = ensure_columns(MVLV_trafos, trafo_columns)
     HA_Bus_clean = ensure_columns(HA_Bus, bus_columns)
-    
-    #secure same crs
+
+    # secure same crs
     target_crs = "EPSG:32632"
-    for gdf in [LV_lines, MV_lines, HA_lines, joints_clean, distributors_clean, HA_Bus_clean, MVLV_trafos_clean]:
+    for gdf in [
+        LV_lines,
+        MV_lines,
+        HA_lines,
+        joints_clean,
+        distributors_clean,
+        HA_Bus_clean,
+        MVLV_trafos_clean,
+    ]:
         if not gdf.empty:
             gdf.to_crs(target_crs, inplace=True)
-    
+
     # combine all bus-datfarmes
-    buses = pd.concat([joints_clean, distributors_clean, MVLV_trafos_clean, HA_Bus_clean], ignore_index=True)
+    buses = pd.concat(
+        [joints_clean, distributors_clean, MVLV_trafos_clean, HA_Bus_clean],
+        ignore_index=True,
+    )
     buses["bus_id"] = [f"bus_{i}" for i in range(len(buses))]
-    buses = buses.reset_index(drop=True)   
-    
+    buses = buses.reset_index(drop=True)
+
     ##lines
-    MV_lines['KABELTYP'] = None    ###Delete when KABElTYP is part of shape file attributes
-    line_columns = ['comp_type', 'KABELTYP', 'geometry']  
-    #combine all line-dataframes
+    MV_lines["KABELTYP"] = (
+        None  ###Delete when KABElTYP is part of shape file attributes
+    )
+    line_columns = ["comp_type", "KABELTYP", "geometry"]
+    # combine all line-dataframes
     lines_list = [df for df in [LV_lines, MV_lines, HA_lines] if not df.empty]
     lines = pd.concat([df[line_columns] for df in lines_list], ignore_index=True)
     lines["line_id"] = [f"line_{i}" for i in range(len(lines))]
     lines = lines.reset_index(drop=True)
-    
+
     return buses, lines
 
 
 def merge_connected_mv_lines(lines, tolerance=0.001):
     """
-    If MV-Lines are just splitted by "Muffe" the lines will be merged together and treated as one line 
+    If MV-Lines are just splitted by "Muffe" the lines will be merged together and treated as one line
     """
 
     lines = lines.copy()
-    lines_mv = lines[lines.comp_type=='mv_line'].reset_index(drop=True)
+    lines_mv = lines[lines.comp_type == "mv_line"].reset_index(drop=True)
     merged_lines = []
 
     while len(lines_mv) > 0:
         # Nimm die erste Linie als Basis
         base_line = lines_mv.iloc[0]
         base_geom = base_line.geometry
-        base_attrs = base_line.drop(labels='geometry').to_dict()
+        base_attrs = base_line.drop(labels="geometry").to_dict()
         lines_mv = lines_mv.drop(0).reset_index(drop=True)
 
         changed = True
@@ -139,10 +170,12 @@ def merge_connected_mv_lines(lines, tolerance=0.001):
                 other_start = Point(other_geom.coords[0])
                 other_end = Point(other_geom.coords[-1])
 
-                if (base_start.distance(other_start) < tolerance or
-                    base_start.distance(other_end) < tolerance or
-                    base_end.distance(other_start) < tolerance or
-                    base_end.distance(other_end) < tolerance):
+                if (
+                    base_start.distance(other_start) < tolerance
+                    or base_start.distance(other_end) < tolerance
+                    or base_end.distance(other_start) < tolerance
+                    or base_end.distance(other_end) < tolerance
+                ):
 
                     # Merge Linien korrekt orientiert
                     merged_geom = linemerge(unary_union([base_geom, other_geom]))
@@ -157,17 +190,18 @@ def merge_connected_mv_lines(lines, tolerance=0.001):
                     break  # for-Schleife neu starten
 
         # Fertige gemergte Linie speichern
-        merged_lines.append({**base_attrs, 'geometry': base_geom})
-    
+        merged_lines.append({**base_attrs, "geometry": base_geom})
+
     if len(merged_lines) > 0:
-        merged_gdf = gpd.GeoDataFrame(merged_lines, geometry='geometry', crs=lines.crs)
+        merged_gdf = gpd.GeoDataFrame(merged_lines, geometry="geometry", crs=lines.crs)
     else:
-        merged_gdf = gpd.GeoDataFrame(columns=lines.columns, geometry='geometry', crs=lines.crs)
-    #add adjusted mv_lines in original dataframe
-    lines = lines[lines.comp_type!='mv_line']
+        merged_gdf = gpd.GeoDataFrame(
+            columns=lines.columns, geometry="geometry", crs=lines.crs
+        )
+    # add adjusted mv_lines in original dataframe
+    lines = lines[lines.comp_type != "mv_line"]
     lines = pd.concat([lines, merged_gdf], ignore_index=True)
     return lines
-
 
 
 ###LV-lines
@@ -184,7 +218,7 @@ def cut_line_at_points(line, cutting_points):
         distances = [0.0] + distances
     if line.length not in distances:
         distances.append(line.length)
- 
+
     # interpolate points
     points = [line.interpolate(distance) for distance in distances]
 
@@ -196,6 +230,7 @@ def cut_line_at_points(line, cutting_points):
             segments.append(segment)
 
     return segments
+
 
 def cut_line_between_distances(line, start_distance, end_distance, tolerance=0.01):
     """
@@ -222,8 +257,10 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
     with all lines (LV, HC, MV), where only LV and HC lines are split.
     """
 
-    lines_to_split = lines[lines.comp_type.isin(['lv_line', 'hc_line'])].copy()
-    other_lines = lines[~lines.comp_type.isin(['lv_line', 'hc_line'])].copy()  # z.B. mv_line
+    lines_to_split = lines[lines.comp_type.isin(["lv_line", "hc_line"])].copy()
+    other_lines = lines[
+        ~lines.comp_type.isin(["lv_line", "hc_line"])
+    ].copy()  # z.B. mv_line
 
     split_lines = []
 
@@ -231,86 +268,125 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
         line_geom = row.geometry
 
         # Filter relevant Muffen/Buses for splitting
-        joint_buses = buses[buses.comp_type.isin([
-            'Hausanschlußmuffe', 'Verbindungsmuffe', 'Endmuffe',
-            'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende',
-            'HA-Kombimuffe', 'distributor'
-        ])].copy()
+        joint_buses = buses[
+            buses.comp_type.isin(
+                [
+                    "Hausanschlußmuffe",
+                    "Verbindungsmuffe",
+                    "Endmuffe",
+                    "Übergangsmuffe",
+                    "Reparaturmuffe",
+                    "vorverlegtes Ende",
+                    "HA-Kombimuffe",
+                    "distributor",
+                ]
+            )
+        ].copy()
 
-        joint_buses['distance'] = joint_buses.geometry.apply(lambda p: line_geom.distance(p))
-        near_joints = joint_buses[joint_buses['distance'] < tolerance]
+        joint_buses["distance"] = joint_buses.geometry.apply(
+            lambda p: line_geom.distance(p)
+        )
+        near_joints = joint_buses[joint_buses["distance"] < tolerance]
 
         if near_joints.empty:
-            split_lines.append({
-                'geometry': line_geom,
-                'comp_type': row.comp_type,
-                'KABELTYP': row.KABELTYP
-            })
+            split_lines.append(
+                {
+                    "geometry": line_geom,
+                    "comp_type": row.comp_type,
+                    "KABELTYP": row.KABELTYP,
+                }
+            )
         else:
             snapped_points = list(near_joints.geometry)
-            split_segments = cut_line_at_points(line_geom, snapped_points)  # Annahme: existierende Hilfsfunktion
+            split_segments = cut_line_at_points(
+                line_geom, snapped_points
+            )  # Annahme: existierende Hilfsfunktion
 
             for segment in split_segments:
-                split_lines.append({
-                    'geometry': segment,
-                    'comp_type': row.comp_type,
-                    'KABELTYP': row.KABELTYP
-                })
+                split_lines.append(
+                    {
+                        "geometry": segment,
+                        "comp_type": row.comp_type,
+                        "KABELTYP": row.KABELTYP,
+                    }
+                )
 
     split_lines_df = pd.DataFrame(split_lines)
-    split_lines_gdf = gpd.GeoDataFrame(split_lines_df, geometry='geometry', crs=lines.crs)
+    split_lines_gdf = gpd.GeoDataFrame(
+        split_lines_df, geometry="geometry", crs=lines.crs
+    )
     final_gdf = pd.concat([split_lines_gdf, other_lines], ignore_index=True)
 
     # new line_ids
     final_gdf = final_gdf.reset_index(drop=True)
-    final_gdf['line_id'] = ['line_' + str(i) for i in range(len(final_gdf))]
+    final_gdf["line_id"] = ["line_" + str(i) for i in range(len(final_gdf))]
 
     return final_gdf
 
- 
 
 def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
     """
     Snaps all 'joint'-buses directly on the closest line, if distance < tolerance.
     Secures that coords from buses are directly on the line to avoid skipping inaccurate data.
     """
-    joint_buses = buses[buses.comp_type.isin(['Hausanschlußmuffe', 'Verbindungsmuffe', 'Endmuffe',
-                                          'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende', 'HA-Kombimuffe'])].copy()
+    joint_buses = buses[
+        buses.comp_type.isin(
+            [
+                "Hausanschlußmuffe",
+                "Verbindungsmuffe",
+                "Endmuffe",
+                "Übergangsmuffe",
+                "Reparaturmuffe",
+                "vorverlegtes Ende",
+                "HA-Kombimuffe",
+            ]
+        )
+    ].copy()
 
-    other_buses = buses[~buses.comp_type.isin(['Hausanschlußmuffe', 'Verbindungsmuffe', 'Endmuffe',
-                                           'Übergangsmuffe', 'Reparaturmuffe', 'vorverlegtes Ende', 'HA-Kombimuffe'])].copy()
+    other_buses = buses[
+        ~buses.comp_type.isin(
+            [
+                "Hausanschlußmuffe",
+                "Verbindungsmuffe",
+                "Endmuffe",
+                "Übergangsmuffe",
+                "Reparaturmuffe",
+                "vorverlegtes Ende",
+                "HA-Kombimuffe",
+            ]
+        )
+    ].copy()
 
-    
-    lines = lines[lines.comp_type.isin(['lv_line', 'hc_line'])]
+    lines = lines[lines.comp_type.isin(["lv_line", "hc_line"])]
     line_geometries = list(lines.geometry)
     str_tree = STRtree(line_geometries)
-    
-    snapped_indices = [] 
+
+    snapped_indices = []
     for idx, bus in joint_buses.iterrows():
         nearest_idx = str_tree.nearest(bus.geometry)
-        nearest_geom = line_geometries[nearest_idx] 
+        nearest_geom = line_geometries[nearest_idx]
         min_dist = bus.geometry.distance(nearest_geom)
-        
-        if 0 < min_dist <= tolerance :
+
+        if 0 < min_dist <= tolerance:
             projected_distance = nearest_geom.project(bus.geometry)
             snapped_point = nearest_geom.interpolate(projected_distance)
             print(f"{bus.bus_id} is projected to the corresponding line")
-            joint_buses.at[idx, 'geometry'] = snapped_point
+            joint_buses.at[idx, "geometry"] = snapped_point
             snapped_indices.append(idx)
-            
-    buses_updated = pd.concat([joint_buses, other_buses]).sort_index()   
-    
-    #buses_updated.to_file('/home/student/Documents/LoMa/Code/test_grid_buses_before_network.shp')
-    
+
+    buses_updated = pd.concat([joint_buses, other_buses]).sort_index()
+
+    # buses_updated.to_file('/home/student/Documents/LoMa/Code/test_grid_buses_before_network.shp')
+
     return buses_updated
 
 
 #####house connection buses
 def find_connected_HA_line(current_point, HA_lines, visited_lines, tolerance=0.1):
     """
-    Searches for another HA line connected to the current point 
+    Searches for another HA line connected to the current point
     that has not yet been visited.
-    
+
     Parameters:
     - current_point: Shapely Point to check connections from.
     - HA_lines: GeoDataFrame of house connection lines.
@@ -337,7 +413,7 @@ def find_connected_HA_line(current_point, HA_lines, visited_lines, tolerance=0.1
 
 def assign_house_connections_to_joints(lines, buses, tolerance=0.1):
     """
-    Assigns each house connection bus to the nearest joint bus, 
+    Assigns each house connection bus to the nearest joint bus,
     following the connected HA lines starting from the end opposite the house connection.
 
     Parameters:
@@ -348,15 +424,15 @@ def assign_house_connections_to_joints(lines, buses, tolerance=0.1):
     Returns:
     - mapping: Dictionary mapping house connection bus indices to joint bus indices.
     """
-    HA_lines = lines[lines.comp_type=='HA_Line']
-    joint_buses = buses[buses.comp_type == 'joint'].copy()
-    house_buses = buses[buses.comp_type == 'house_connection'].copy()
+    HA_lines = lines[lines.comp_type == "HA_Line"]
+    joint_buses = buses[buses.comp_type == "joint"].copy()
+    house_buses = buses[buses.comp_type == "house_connection"].copy()
 
     mapping = {}
 
     for idx, house_bus in house_buses.iterrows():
         # Find the closest HA line to the house connection bus
-        min_dist = float('inf')
+        min_dist = float("inf")
         closest_line_idx = None
 
         for line_idx, line in HA_lines.iterrows():
@@ -374,7 +450,9 @@ def assign_house_connections_to_joints(lines, buses, tolerance=0.1):
         start_point = Point(line.geometry.coords[0])
         end_point = Point(line.geometry.coords[-1])
 
-        if house_bus.geometry.distance(start_point) < house_bus.geometry.distance(end_point):
+        if house_bus.geometry.distance(start_point) < house_bus.geometry.distance(
+            end_point
+        ):
             current_point = end_point
         else:
             current_point = start_point
@@ -383,20 +461,25 @@ def assign_house_connections_to_joints(lines, buses, tolerance=0.1):
 
         # Follow connected HA lines until no further connection is found
         while True:
-            next_line_idx, next_point = find_connected_HA_line(current_point, HA_lines, visited_lines, tolerance)
+            next_line_idx, next_point = find_connected_HA_line(
+                current_point, HA_lines, visited_lines, tolerance
+            )
             if next_line_idx is None:
                 break
             visited_lines.add(next_line_idx)
             current_point = next_point
 
         # Find the nearest joint bus to the final reference point
-        joint_buses['distance'] = joint_buses.geometry.apply(lambda p: p.distance(current_point))
-        closest_joint_idx = joint_buses['distance'].idxmin()
+        joint_buses["distance"] = joint_buses.geometry.apply(
+            lambda p: p.distance(current_point)
+        )
+        closest_joint_idx = joint_buses["distance"].idxmin()
 
         # Map the house connection bus to the closest joint bus
         mapping[idx] = closest_joint_idx
 
     return mapping
+
 
 def map_load_bus_to_network_bus(buses, lines):
     """
@@ -412,36 +495,49 @@ def map_load_bus_to_network_bus(buses, lines):
       or lie on any line, excluding buses with comp_type 'house connection' from input
     """
     # First filter out buses with comp_type 'house connection'
-    buses_filtered = buses[buses['comp_type'] != 'house_connection']
+    buses_filtered = buses[buses["comp_type"] != "house_connection"]
 
     # Get assignments from house connections to network buses (based on original buses)
     mapping = assign_house_connections_to_joints(lines, buses)
 
     # Group house connections per network bus
-    grouped_mapping = defaultdict(lambda: {'house_connection_bus_ids': [], 'house_connection_geoms': []})
+    grouped_mapping = defaultdict(
+        lambda: {"house_connection_bus_ids": [], "house_connection_geoms": []}
+    )
     for house_bus_id, network_bus_id in mapping.items():
         house_bus = buses.loc[buses.index == house_bus_id].iloc[0]
-        grouped_mapping[network_bus_id]['house_connection_bus_ids'].append(house_bus.bus_id)
-        grouped_mapping[network_bus_id]['house_connection_geoms'].append(house_bus.geometry)
+        grouped_mapping[network_bus_id]["house_connection_bus_ids"].append(
+            house_bus.bus_id
+        )
+        grouped_mapping[network_bus_id]["house_connection_geoms"].append(
+            house_bus.geometry
+        )
 
     # Add house connection info (empty lists if no assignment)
     buses_filtered = buses_filtered.copy()
-    buses_filtered['house_connection_bus_ids'] = buses_filtered.index.map(
-        lambda idx: grouped_mapping[idx]['house_connection_bus_ids'] if idx in grouped_mapping else []
+    buses_filtered["house_connection_bus_ids"] = buses_filtered.index.map(
+        lambda idx: (
+            grouped_mapping[idx]["house_connection_bus_ids"]
+            if idx in grouped_mapping
+            else []
+        )
     )
-    buses_filtered['house_connection_geoms'] = buses_filtered.index.map(
-        lambda idx: grouped_mapping[idx]['house_connection_geoms'] if idx in grouped_mapping else []
+    buses_filtered["house_connection_geoms"] = buses_filtered.index.map(
+        lambda idx: (
+            grouped_mapping[idx]["house_connection_geoms"]
+            if idx in grouped_mapping
+            else []
+        )
     )
 
     # Combine all line geometries for fast distance queries
     all_lines_geom = lines.unary_union
+
     def on_line(geom, tolerance=1e-6):
         return all_lines_geom.distance(geom) < tolerance
-    
+
     # Keep only buses that lie on any line
-    filtered_buses = buses_filtered[
-        buses_filtered.geometry.apply(on_line)
-    ]
+    filtered_buses = buses_filtered[buses_filtered.geometry.apply(on_line)]
 
     return filtered_buses
 
@@ -468,8 +564,8 @@ def get_nearest_bus_robust(point, bus_gdf, k=5):
 
     # 3. nächsten Bus auswählen
     min_idx = candidates["dist_to_point"].idxmin()
-    nearest_bus = candidates.loc[min_idx, 'bus_id']
-    nearest_distance = candidates.loc[min_idx, 'dist_to_point']
+    nearest_bus = candidates.loc[min_idx, "bus_id"]
+    nearest_distance = candidates.loc[min_idx, "dist_to_point"]
 
     return nearest_bus, nearest_distance
 
@@ -482,10 +578,9 @@ def get_nearest_bus(point, bus_tree, buses_df):
     return buses_df.loc[idx, "bus_id"], dist
 
 
-
-###creating pypsa grid 
+###creating pypsa grid
 def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
-    """    
+    """
     Based on exported shapefiles recreate the grid infrastructure as pysa_network
 
     Parameters
@@ -502,142 +597,180 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     None.
 
     """
-    
+
     # import buses
     buses["centroid"] = buses.geometry.centroid
     for _, row in buses.iterrows():
-        n.add("Bus",
-          row["bus_id"],
-          x=row.centroid.x,
-          y=row.centroid.y)
-        n.buses.at[row["bus_id"], 'comp_type'] = row['comp_type']
-        n.buses.at[row["bus_id"], 'household_count'] = row['household_count']
-        n.buses.at[row["bus_id"], 'HP'] = row['HP']
-        n.buses.at[row["bus_id"], 'trafo_cap'] = row['s_nom']
-        n.buses.at[row["bus_id"], 'geom'] = row['geometry']
-        
+        n.add("Bus", row["bus_id"], x=row.centroid.x, y=row.centroid.y)
+        n.buses.at[row["bus_id"], "comp_type"] = row["comp_type"]
+        n.buses.at[row["bus_id"], "household_count"] = row["household_count"]
+        n.buses.at[row["bus_id"], "HP"] = row["HP"]
+        n.buses.at[row["bus_id"], "trafo_cap"] = row["s_nom"]
+        n.buses.at[row["bus_id"], "geom"] = row["geometry"]
+
     # import LV lines
     for idx, row in lines.iterrows():
         line_geom = row.geometry
         start_point = Point(line_geom.coords[0])
         end_point = Point(line_geom.coords[-1])
 
-        #relevant_buses = buses[buses.comp_type.isin(['joint', 'distributor', 'trafo'])]
-        #relevant_buses = relevant_buses.reset_index(drop=True)
+        # relevant_buses = buses[buses.comp_type.isin(['joint', 'distributor', 'trafo'])]
+        # relevant_buses = relevant_buses.reset_index(drop=True)
         relevant_buses = buses
-    
-        bus_coords = np.array([[geom.centroid.x, geom.centroid.y] for geom in relevant_buses.geometry])
+
+        bus_coords = np.array(
+            [[geom.centroid.x, geom.centroid.y] for geom in relevant_buses.geometry]
+        )
         bus_tree = cKDTree(bus_coords)
-    
+
         # Starte mit allen relevanten Bussen
         bus0, dist0 = get_nearest_bus_robust(start_point, buses)
         bus1, dist1 = get_nearest_bus_robust(end_point, buses)
-        
+
         # If nearest bus is not directly next to line end/start, search for close distributor/trafo
         if 10 > dist0 > 0.1:
-            traf_dist_buses = buses[buses.comp_type.isin(['distributor', 'trafo'])].reset_index(drop=True)
-            traf_bus, traf_dist = get_nearest_bus_robust(start_point, traf_dist_buses)    
+            traf_dist_buses = buses[
+                buses.comp_type.isin(["distributor", "trafo"])
+            ].reset_index(drop=True)
+            traf_bus, traf_dist = get_nearest_bus_robust(start_point, traf_dist_buses)
             # just use if trafo/distributor is nearby
             if traf_dist < 10:
                 bus0, dist0 = traf_bus, traf_dist
             else:
-                if row['comp_type'] != 'mv_line':
+                if row["comp_type"] != "mv_line":
                     bus0, dist0 = get_nearest_bus_robust(start_point, buses)
-                    print(f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead.")  
-                else: 
-                    print(f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line.")
+                    print(
+                        f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
+                    )
+                else:
+                    print(
+                        f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
+                    )
                     continue
         elif dist0 >= 10:
             # If no nearby bus at all, skip that line
-            print(f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line.")
+            print(
+                f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
+            )
             continue
-    
+
         if 10 > dist1 > 0.1:
-            traf_dist_buses = buses[buses.comp_type.isin(['distributor', 'trafo'])].reset_index(drop=True)
-            traf_bus, traf_dist = get_nearest_bus_robust(end_point, traf_dist_buses)    
+            traf_dist_buses = buses[
+                buses.comp_type.isin(["distributor", "trafo"])
+            ].reset_index(drop=True)
+            traf_bus, traf_dist = get_nearest_bus_robust(end_point, traf_dist_buses)
             # just use if trafo/distributor is nearby
             if traf_dist < 10:
                 bus1, dist1 = traf_bus, traf_dist
             else:
-               if row['comp_type'] != 'mv_line':
-                   bus1, dist1 = get_nearest_bus_robust(end_point, buses)
-                   print(f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead.")  
-               else: 
-                   print(f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line.")
-                   continue    
+                if row["comp_type"] != "mv_line":
+                    bus1, dist1 = get_nearest_bus_robust(end_point, buses)
+                    print(
+                        f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
+                    )
+                else:
+                    print(
+                        f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
+                    )
+                    continue
         elif dist1 >= 10:
             # If no nearby bus at all, skip that line
-            print(f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line.")
+            print(
+                f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
+            )
             continue
-        
+
         length_km = line_geom.length / 1000
-        cable_type = row['KABELTYP']
+        cable_type = row["KABELTYP"]
         if cable_type in cable_types:
-           r = cable_types[cable_type]["R"] * length_km      # Ohm
-           x = cable_types[cable_type]["L"]/1000 * 50 * 2 * np.pi * length_km  # 2pi*frequenz #Ohm
-           s_nom  = cable_types[cable_type]["U"] * cable_types[cable_type]["I_max"] * np.sqrt(3)/1e6    # MW 
-           
+            r = cable_types[cable_type]["R"] * length_km  # Ohm
+            x = (
+                cable_types[cable_type]["L"] / 1000 * 50 * 2 * np.pi * length_km
+            )  # 2pi*frequenz #Ohm
+            s_nom = (
+                cable_types[cable_type]["U"]
+                * cable_types[cable_type]["I_max"]
+                * np.sqrt(3)
+                / 1e6
+            )  # MW
+
         else:
-           # ToDo: define reasonable default-values
-           r = 0.3
-           x = 0.05
-           s_nom = 1
-         
-        capital_costs = 100_000*length_km/s_nom
-           
-        n.add("Line", row['line_id'], bus0=bus0, bus1=bus1, carrier='AC',
-              length=length_km, r=r, x=x, s_nom=s_nom, s_nom_min = s_nom, capital_cost = capital_costs)
-        n.lines.at[row["line_id"], 'comp_type'] = row['comp_type']
-        n.lines.at[row["line_id"], 'geom'] = row['geometry']
-        n.lines.at[row["line_id"], 'cable_type'] = row['KABELTYP']
-        
+            # ToDo: define reasonable default-values
+            r = 0.3
+            x = 0.05
+            s_nom = 1
+
+        capital_costs = 100_000 * length_km / s_nom
+
+        n.add(
+            "Line",
+            row["line_id"],
+            bus0=bus0,
+            bus1=bus1,
+            carrier="AC",
+            length=length_km,
+            r=r,
+            x=x,
+            s_nom=s_nom,
+            s_nom_min=s_nom,
+            capital_cost=capital_costs,
+        )
+        n.lines.at[row["line_id"], "comp_type"] = row["comp_type"]
+        n.lines.at[row["line_id"], "geom"] = row["geometry"]
+        n.lines.at[row["line_id"], "cable_type"] = row["KABELTYP"]
+
         ##for validating
-        lines.at[idx, 'bus_0'] = bus0
-        lines.at[idx, 'bus_1'] = bus1
-        lines.at[idx, 'line_id'] = row['line_id']
-    
-   
-    
-    #add generator at trafo
-    trafo_buses = n.buses[n.buses.comp_type=='trafo'] 
-    n.buses = n.buses.drop('trafo_cap', axis='columns')    # trafo_cap column isn't used anymore
+        lines.at[idx, "bus_0"] = bus0
+        lines.at[idx, "bus_1"] = bus1
+        lines.at[idx, "line_id"] = row["line_id"]
+
+    # add generator at trafo
+    trafo_buses = n.buses[n.buses.comp_type == "trafo"]
+    n.buses = n.buses.drop(
+        "trafo_cap", axis="columns"
+    )  # trafo_cap column isn't used anymore
     for idx, bus in trafo_buses.iterrows():
-        lv_bus = bus.name               
-        ms_bus = f"{lv_bus}_MS"         #dummy bus for now
+        lv_bus = bus.name
+        ms_bus = f"{lv_bus}_MS"  # dummy bus for now
         s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
-        
-        n.add("Bus",
-              name=ms_bus,
-              v_nom=20,  
-              carrier="AC",
-              HP = bus.HP,
-              household_count = bus.household_count,
-              geom = bus.geom)
-        
-        n.add("Transformer",
-              name=f"trafo_{lv_bus}",
-              bus0=ms_bus,  
-              bus1=lv_bus,   
-              x=0.03864647477581,        #example vlaues from dingo
-              r=0.0103174603174603,
-              s_nom=s_nom)
-        
+
+        n.add(
+            "Bus",
+            name=ms_bus,
+            v_nom=20,
+            carrier="AC",
+            HP=bus.HP,
+            household_count=bus.household_count,
+            geom=bus.geom,
+        )
+
+        n.add(
+            "Transformer",
+            name=f"trafo_{lv_bus}",
+            bus0=ms_bus,
+            bus1=lv_bus,
+            x=0.03864647477581,  # example vlaues from dingo
+            r=0.0103174603174603,
+            s_nom=s_nom,
+        )
+
         # 3. Generator am MS-Bus anschließen
-        n.add("Generator", 
-              name=f"gen_{idx}",
-              bus=ms_bus,
-              carrier="AC",
-              p_nom=1e6, 
-              marginal_cost=100)
-    
-    #add carriers
+        n.add(
+            "Generator",
+            name=f"gen_{idx}",
+            bus=ms_bus,
+            carrier="AC",
+            p_nom=1e6,
+            marginal_cost=100,
+        )
+
+    # add carriers
     carriers = ["AC", "land_transport_EV", "14a", "home_battery", "solar_rooftop"]
     for c in carriers:
         n.add("Carrier", c)
 
     return buses, lines
 
-    
 
 def open_LV_circle(n, lv_line_idx):
     if lv_line_idx in n.lines.index:
@@ -655,99 +788,127 @@ def fix_grid_infrastructure(n, min_size=10):
     if not loop_lines.empty:
         print(f"⚠️ Loop lines (bus0==bus1) found:\n{loop_lines[['bus0', 'bus1']]}")
         print("⚠️ This lines will be deleted.")
-        n.mremove("Line", loop_lines.index.tolist())
-    
+        n.remove("Line", loop_lines.index.tolist())
+
     # Lösche unverbundene Busse (ohne Subnetz)
     line_buses = pd.concat([n.lines.bus0, n.lines.bus1]).unique()
     connected_transformers = n.transformers[
         n.transformers.bus0.isin(line_buses) | n.transformers.bus1.isin(line_buses)
     ]
-    con_buses = pd.concat([n.lines.bus0, n.lines.bus1,
-                           connected_transformers.bus0, connected_transformers.bus1]).unique()
-    
+    con_buses = pd.concat(
+        [
+            n.lines.bus0,
+            n.lines.bus1,
+            connected_transformers.bus0,
+            connected_transformers.bus1,
+        ]
+    ).unique()
+
     uncon_buses = n.buses[~n.buses.index.isin(con_buses)]
     if not uncon_buses.empty:
         print(f"⚠️ Found not connected busses:\n{uncon_buses.index.tolist()}")
         print("⚠️ Buses and according components will be deleted.")
-        n.mremove("Bus", uncon_buses.index.tolist())
-        
+        n.remove("Bus", uncon_buses.index.tolist())
+
         # Lösche alle Komponenten, die an unverbundenen Bussen hängen
         for comp in ["Generator", "Transformer", "Load", "StorageUnit", "Link"]:
             df = n.df(comp)
             if comp == "Transformer":
-                to_remove = df[df.bus0.isin(uncon_buses.index) | df.bus1.isin(uncon_buses.index)].index.tolist()
+                to_remove = df[
+                    df.bus0.isin(uncon_buses.index) | df.bus1.isin(uncon_buses.index)
+                ].index.tolist()
             elif comp == "Link":
-                to_remove = df[df.bus0.isin(uncon_buses.index) | df.bus1.isin(uncon_buses.index)].index.tolist()
+                to_remove = df[
+                    df.bus0.isin(uncon_buses.index) | df.bus1.isin(uncon_buses.index)
+                ].index.tolist()
             else:
                 to_remove = df[df.bus.isin(uncon_buses.index)].index.tolist()
             if to_remove:
                 print(f"⚠️ Remove {len(to_remove)} {comp}(s) at unconnected buses")
-                n.mremove(comp, to_remove)
-    
+                n.remove(comp, to_remove)
+
     # Erkenne Subnetzwerke
-    G = n.graph()  
+    G = n.graph()
     components = list(nx.connected_components(G))
-    
+
     for comp in components:
         if len(comp) < min_size:
-            print(f"⚠️ Small subnetwork with {len(comp)} Buses found: {sorted(list(comp))[:5]} ...")
+            print(
+                f"⚠️ Small subnetwork with {len(comp)} Buses found: {sorted(list(comp))[:5]} ..."
+            )
             # Lösche alle Busse im Subnetz
-            n.mremove("Bus", list(comp))
+            n.remove("Bus", list(comp))
             # Lösche alle Komponenten, die an diesen Bussen hängen
-            for comp_name in ["Generator", "Transformer", "Load", "StorageUnit", "Link", "Line"]:
+            for comp_name in [
+                "Generator",
+                "Transformer",
+                "Load",
+                "StorageUnit",
+                "Link",
+                "Line",
+            ]:
                 df = n.df(comp_name)
                 if comp_name in ["Transformer", "Link", "Line"]:
-                    to_remove = df[df.bus0.isin(comp) | df.bus1.isin(comp)].index.tolist()
+                    to_remove = df[
+                        df.bus0.isin(comp) | df.bus1.isin(comp)
+                    ].index.tolist()
                 else:
                     to_remove = df[df.bus.isin(comp)].index.tolist()
                 if to_remove:
-                    print(f"⚠️ Remove {len(to_remove)} {comp_name}(s) inside of the subnetwork")
-                    n.mremove(comp_name, to_remove)
+                    print(
+                        f"⚠️ Remove {len(to_remove)} {comp_name}(s) inside of the subnetwork"
+                    )
+                    n.remove(comp_name, to_remove)
         else:
-            print(f"⚠️ Main Subnetwork with {len(comp)} Buses found – will be maintained.")
-    
+            print(
+                f"⚠️ Main Subnetwork with {len(comp)} Buses found – will be maintained."
+            )
+
     print("✅ Infrastructure of network is fixed.")
-    
+
+
 def import_ev_chargers(n):
-    
-    #use shapefile for ladesäulen
+
+    # use shapefile for ladesäulen
     return
-    
 
-    
 
-def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_folder, cable_types, household_count, export_shape_files, census_data):
+def create_pypsa_network(
+    shape_files_folder,
+    q_households_folder,
+    heat_pump_folder,
+    cable_types,
+    household_count,
+    export_shape_files,
+    census_data,
+):
     n = pypsa.Network()
-    time_index = pd.date_range('2023-01-01', periods=8760, freq='h')
+    time_index = pd.date_range("2023-01-01", periods=8760, freq="h")
     n.snapshots = time_index
-    
+
     buses, lines = create_gdf_from_shape(shape_files_folder)
     buses = snap_joint_buses_to_lines(lines, buses)
-    if household_count: #check if household_data taken from cencus or own input_file
+    if household_count:  # check if household_data taken from cencus or own input_file
         buses = count_households_per_bus_census_data(buses, census_data)
     else:
-        buses = count_households_per_bus_input_file(buses, q_households_folder)  
+        buses = count_households_per_bus_input_file(buses, q_households_folder)
     buses = check_heat_pumps(buses, heat_pump_folder)
     lines = merge_connected_mv_lines(lines)
-   
-    #final_load_buses = map_load_bus_to_network_bus(buses, lines)
-    #network_buses = buses[buses.comp_type.isin(['trafo', 'distributor'])]
-    #all_network_buses = pd.concat([final_load_buses, network_buses])
-    split_lines = split_lines_on_joints(lines, buses)
-    #merged_lines = merge_unconnected_lines(split_lines, buses)
-    buses, lines = import_grid_infrastructure(n, buses, split_lines, cable_types, household_count) 
-    if export_shape_files:
-        os.makedirs('results', exist_ok=True)
-        buses = buses.drop(columns=['geometry'])
-        buses.to_file('results/grid_buses_test.shp')
-        lines.to_file('results/grid_lines_test.shp')
-    fix_grid_infrastructure(n)
-    #n = open_LV_circle(n, 'line_163')
-    
-    return n
-    
-    
-    
 
-    
-    
+    # final_load_buses = map_load_bus_to_network_bus(buses, lines)
+    # network_buses = buses[buses.comp_type.isin(['trafo', 'distributor'])]
+    # all_network_buses = pd.concat([final_load_buses, network_buses])
+    split_lines = split_lines_on_joints(lines, buses)
+    # merged_lines = merge_unconnected_lines(split_lines, buses)
+    buses, lines = import_grid_infrastructure(
+        n, buses, split_lines, cable_types, household_count
+    )
+    if export_shape_files:
+        os.makedirs("results", exist_ok=True)
+        buses = buses.drop(columns=["geometry"])
+        buses.to_file("results/grid_buses_test.shp")
+        lines.to_file("results/grid_lines_test.shp")
+    fix_grid_infrastructure(n)
+    # n = open_LV_circle(n, 'line_163')
+
+    return n
