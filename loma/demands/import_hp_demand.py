@@ -24,7 +24,8 @@ def check_heat_pumps(buses, input_path):
 
     con_buses = buses[buses.comp_type == "house_connection"].copy()
     con_buses["HP"] = 0  # Initialize HP column
-
+    con_buses["hp_capacity"] = 0.0
+    
     csv_path = input_path
     folder = os.path.dirname(input_path)
     
@@ -34,7 +35,6 @@ def check_heat_pumps(buses, input_path):
         con_buses["Straße"] = con_buses["Straße"].str.replace("Strasse", "Straße")
         con_buses["parsed_numbers"] = con_buses["Hausnummer"].apply(parse_bus_numbers)
         hp_df["parsed_numbers"] = hp_df["Hnr."].apply(parse_bus_numbers)
-
         hp_df = hp_df[hp_df.WP == "ja"]
 
         for idx, row in hp_df.iterrows():
@@ -75,39 +75,80 @@ def check_heat_pumps(buses, input_path):
             columns={"building_i": "building_id", "hp_capacit": "hp_capacity"}
         )
 
+        if "hp_capacity" not in fallback_hp.columns:
+            fallback_hp["hp_capacity"] = 0.0
+            
         # Convert buses to GeoDataFrame
         bus_gdf = gpd.GeoDataFrame(
             con_buses,
             geometry=gpd.points_from_xy(con_buses.geometry.x, con_buses.geometry.y),
             crs=fallback_hp.crs
         )
+        
+        if "bus_id" in bus_gdf.columns:
+            bus_gdf["_bus_id_map"] = bus_gdf["bus_id"]
+        else:
+            bus_gdf["_bus_id_map"] = bus_gdf.index.astype(str)
+    
+        # Initialize columns on bus_gdf
+        bus_gdf["hp_capacity"] = 0.0
+        bus_gdf["HP"]= 0
+        
+        max_dist = 25
+        assigned_hp={} 
+        
+        for hp_idx, hp in fallback_hp.iterrows():
+            hp_geom = hp.geometry
+            hp_cap = hp.get("hp_capacity", 0)
 
-        # Spatial nearest join to assign HP
-        bus_with_hp = gpd.sjoin_nearest(
-            bus_gdf,
-            fallback_hp[["geometry", "hp_capacity"]],
-            how="left"
-        )
+            if hp_cap <= 0:
+                continue
 
-        # Assign HP flag where fallback capacity > 0
-        bus_with_hp["HP"] = (bus_with_hp["hp_capacity"].fillna(0) > 0).astype(int)
-        bus_with_hp["hp_capacity"] = bus_with_hp["hp_capacity"].fillna(0)
+            # Distance from THIS HP to ALL buses
+            bus_gdf["__dist"] = bus_gdf.geometry.distance(hp_geom)
 
-        # Merge back into main con_buses
-        con_buses["HP"] = bus_with_hp["HP"].values
-        con_buses["hp_capacity"] = bus_with_hp["hp_capacity"].values  # <<< Added
+            # Find nearest bus
+            nearest_idx = bus_gdf["__dist"].idxmin()
+            nearest_dist = bus_gdf.loc[nearest_idx, "__dist"]
+
+            # Only assign if within allowed distance
+            if nearest_dist <= max_dist:
+                bus_gdf.loc[nearest_idx, "hp_capacity"] += hp_cap
+                bus_gdf.loc[nearest_idx, "HP"] = 1
+                assigned_hp[hp_idx] = nearest_idx
+
+        # Cleanup
+        bus_gdf = bus_gdf.drop(columns=["__dist"], errors="ignore")
+
+        # Write results back
+        con_buses["HP"] = bus_gdf["HP"].values
+        con_buses["hp_capacity"] = bus_gdf["hp_capacity"].values
 
     # Update full buses dataframe
-    hp_bus_ids = con_buses[con_buses.HP == 1].bus_id.to_list()
-    buses["HP"] = buses["bus_id"].isin(hp_bus_ids).astype(int)
-
-    # Add capacity column if fallback was used
-    if "hp_capacity" in con_buses.columns:  
-        buses = buses.merge(
-            con_buses[["bus_id", "hp_capacity"]],
-            on="bus_id",
-            how="left"
-        )
+    if "bus_id" in con_buses.columns:
+        hp_bus_ids = con_buses[con_buses.HP == 1].bus_id.to_list()
+        buses["HP"] = buses["bus_id"].isin(hp_bus_ids).astype(int)
+    else:
+        # fallback: use index labels
+        hp_bus_ids = con_buses[con_buses.HP == 1].index.tolist()
+        buses["HP"] = buses.index.isin(hp_bus_ids).astype(int)
+            
+    # Add capacity and source columns if fallback was used
+    if "hp_capacity" in con_buses.columns:
+        if "bus_id" in con_buses.columns:
+            buses = buses.merge(
+                con_buses[["bus_id", "hp_capacity"]],
+                on="bus_id",
+                how="left",
+            )
+        else:
+            # if bus_id not present, add hp cols by index alignment
+            buses["hp_capacity"] = 0.0
+            for idx in con_buses.index:
+                cap = con_buses.loc[idx, "hp_capacity"]
+                if cap > 0 and idx in buses.index:
+                    buses.at[idx, "hp_capacity"] = cap
+                             
         buses["hp_capacity"] = buses["hp_capacity"].fillna(0)
 
     return buses
@@ -164,20 +205,36 @@ def add_heat_loads_to_network(n):
 
     # Spatial mapping: Bus → Census cell
     bus_with_cell = gpd.sjoin_nearest(bus_gdf, heat_demand_cells, how="left")
+    bus_with_cell = bus_with_cell[~bus_with_cell.index.duplicated(keep="first")]
+    
+    # Save original left-index (these are the bus IDs/labels from the network)
+    left_bus_ids = list(bus_with_cell.index)
 
+    # Reset index to get a simple RangeIndex for iteration and for load_profiles columns
+    bus_with_cell = bus_with_cell.reset_index(drop=True)
+    
     # Initialize load time series
     snapshots = n.snapshots
     n_hours = len(snapshots)
+    n_buses = len(bus_with_cell)
     load_profiles = pd.DataFrame(
-        0.0, index=snapshots, columns=bus_with_cell.index
-    )
+        0.0, index=snapshots, columns=range(n_buses)
+        )
+
 
     # Create a profile for each bus
     used_profiles = {}
-    for bus_idx, row in bus_with_cell.iterrows():
+    for col_idx, row in bus_with_cell.iterrows():
+        try:
+            bus_id = left_bus_ids[col_idx]
+        except IndexError:
+            # Sicherheitsnetz: falls Mapping aus irgendeinem Grund nicht passt
+            print(f"IndexError: Kein bus_id für Spalte {col_idx}; überspringe.")
+            continue
+        
         zensus_id = row["zensus_pop"]
         annual_demand = row["demand"]
-        if pd.isna(annual_demand):
+        if pd.isna(annual_demand) or pd.isna(zensus_id):
             continue
 
         # Daily profiles for this cell
@@ -226,17 +283,20 @@ def add_heat_loads_to_network(n):
         cop_air = calculate_cop_air(temp_air["TT_TU"])
         elec_profile = hourly_profile / cop_air
 
-        # Write into matrix
-        elec_profile.index = load_profiles.index
-        load_profiles.loc[:, bus_idx] = elec_profile[:n_hours]
+        # Make pandas Series with snapshots index (ensure length matches)
+        elec_series = pd.Series(elec_profile, index=load_profiles.index)
+        elec_series = elec_series.iloc[:n_hours]
+
+        # Assign into integer column position (single column) -> avoids ambiguous label selection
+        load_profiles.iloc[:, col_idx] = elec_series.values
 
         # Add load to the network
         n.add(
             "Load",
-            name=f"heat_load_{bus_idx}",
-            bus=bus_idx,
+            name=f"heat_load_{bus_id}",
+            bus=bus_id,
             carrier="AC",
-            p_set=load_profiles[bus_idx],
+            p_set=load_profiles.iloc[:, col_idx],
         )
 
     return n

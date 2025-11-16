@@ -155,10 +155,6 @@ def import_EV_demands(n, *, factor=1.0, e_nom_par14_store=1.0, master_seed=42,
             n.add("Bus", ev_bus_name, x=x, y=y)
             n.buses.at[ev_bus_name, "geom"] = n.buses.at[row.bus, "geom"]
 
-        assert "geom" in n.buses.columns
-        print(n.buses[n.buses.index.str.startswith("EV")][["x","y","geom"]].head())
-        
-
         # Connect EV load to EV bus instead of network bus (reassign)
         n.loads.at[load_name, 'bus'] = ev_bus_name
 
