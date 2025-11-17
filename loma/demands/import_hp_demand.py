@@ -151,14 +151,14 @@ def check_heat_pumps(buses, input_path):
                              
         buses["hp_capacity"] = buses["hp_capacity"].fillna(0)
 
-    # Add capacity column if fallback was used
-    if "hp_capacity" in con_buses.columns:  
-        buses = buses.merge(
-            con_buses[["bus_id", "hp_capacity"]],
-            on="bus_id",
-            how="left"
-        )
-        buses["hp_capacity"] = buses.get("hp_capacity", 0.0)
+    # # Add capacity column if fallback was used
+    # if "hp_capacity" in con_buses.columns:  
+    #     buses = buses.merge(
+    #         con_buses[["bus_id", "hp_capacity"]],
+    #         on="bus_id",
+    #         how="left"
+    #     )
+    #     buses["hp_capacity"] = buses.get("hp_capacity", 0.0)
 
     return buses
 
