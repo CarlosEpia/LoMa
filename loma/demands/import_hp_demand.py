@@ -188,7 +188,6 @@ def add_heat_loads_to_network(n):
         ).set_index("MESS_DATUM")
         cop_air = calculate_cop_air(temp_air["TT_TU"])
         elec_profile = hourly_profile / cop_air
-        import pdb; pdb.set_trace()
         
         if elec_profile.max() < 0.0005:
             scaling_factor = avg_hp_capcity/cop_air/elec_profile.max()
