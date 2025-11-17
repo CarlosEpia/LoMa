@@ -155,10 +155,6 @@ def import_EV_demands(n, *, factor=1.0, e_nom_par14_store=1.0, master_seed=42,
             n.add("Bus", ev_bus_name, x=x, y=y)
             n.buses.at[ev_bus_name, "geom"] = n.buses.at[row.bus, "geom"]
 
-        assert "geom" in n.buses.columns
-        print(n.buses[n.buses.index.str.startswith("EV")][["x","y","geom"]].head())
-        
-
         # Connect EV load to EV bus instead of network bus (reassign)
         n.loads.at[load_name, 'bus'] = ev_bus_name
 
@@ -216,7 +212,8 @@ def import_EV_demands(n, *, factor=1.0, e_nom_par14_store=1.0, master_seed=42,
               efficiency=np.sqrt(charge_efficiency),
               )
     
-    # ############## OPTIONAL EXPORT TO CHECK RESULTS ##############
+
+    # ############### OPTIONAL EXPORT TO CHECK RESULTS ###############
     # # Exportiere ev_profiles_df, falls gewünscht
     # if export_profiles:
     #     os.makedirs(export_path, exist_ok=True)
@@ -236,6 +233,7 @@ def import_EV_demands(n, *, factor=1.0, e_nom_par14_store=1.0, master_seed=42,
     #         print(f"{load_name}: Zeitprofil mit {len(p)} Zeitpunkten, peak={p.max():.4f} MW at {p.idxmax()}")
     #     else:
     #         print(f"{load_name}: statischer p_set = {p}")
-    # ##############################################################
+    # ################################################################
+
 
     return n

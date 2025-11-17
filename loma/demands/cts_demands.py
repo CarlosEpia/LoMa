@@ -46,10 +46,10 @@ def assign_cts_demand_to_buses(network, cts_demands):
 
     # ######## ONLY FOR VALIDATION PURPOSES ###############
 
-    cts_demands[["geom", "Bus", "distance"]].to_file(
-         "/home/student/Documents/LoMa/Validation/cts_demands.shp"
-    )
-    buses.to_file("/home/student/Documents/LoMa/Validation/buses.shp")
+    #cts_demands[["geom", "Bus", "distance"]].to_file(
+    #     "/home/student/Documents/LoMa/Validation/cts_demands.shp"
+    #)
+    #buses.to_file("/home/student/Documents/LoMa/Validation/buses.shp")
 
     # #####################################################
 
@@ -78,7 +78,15 @@ def assign_cts_demand_to_buses(network, cts_demands):
     )
     for l in cts_demands_t.index:
         network.loads_t.p_set[l] = cts_demands_t[l]
+        
+        #secure that no household demand is implemented at same bus
+        bus_name = cts_demands.loc[l, "bus"]
+        if "household_count" in network.buses.columns:
+            network.buses.loc[bus_name, "household_count"] = 0
 
+    print("""
+          ✅ CTS loads are succesfully imported.
+          """)
     return network
 
 

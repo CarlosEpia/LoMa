@@ -27,7 +27,7 @@ from loma.MGB_Model_into_ding0_shape import prepare_ding0_shape_export
 from loma.plot_results import plot_results
 
 args = {
-    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid",  # define path of shapefiles for grid infrastructure (related to execution folder)
+    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V2",  # define path of shapefiles for grid infrastructure (related to execution folder)
     "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
     "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
     "path_to_household_data": "data/Input_files/all_streets_household_count.csv",

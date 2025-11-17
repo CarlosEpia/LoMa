@@ -218,7 +218,7 @@ def process_nuts3_hh_distribution_data_V2(df_household_age_dist):
 
     # Define the age categories
     kids = ["Unter 3 Jahre", "3 bis 5 Jahre", "6 bis 14 Jahre"]  # < 15
-    adults = ["15 bis 17 Jahre ", "18 bis 24 Jahre", "25 bis 29 Jahre", "30 bis 39 Jahre", "40 bis 49 Jahre", "50 bis 64 Jahre"]  # 15 < x < 65
+    adults = ["15 bis 17 Jahre", "18 bis 24 Jahre", "25 bis 29 Jahre", "30 bis 39 Jahre", "40 bis 49 Jahre", "50 bis 64 Jahre"]  # 15 < x < 65
     seniors = ["65 bis 74 Jahre", "75 Jahre und älter"]  # > 65
 
     # Group data based on age categories
