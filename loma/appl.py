@@ -96,9 +96,7 @@ n = add_heat_loads_to_network(n)
 n = import_EV_loads(n, args["path_to_shapefiles_grid"])
 n = import_EV_demands(n)
 
-# # insert heat pump flexibilities
-#heat_loads = n.loads[n.loads.index.str.contains("heat")]
-#n.loads_t["p_set"].loc[:,heat_loads.index] = n.loads_t["p_set"].loc[:,heat_loads.index] * 50
+# insert heat pump flexibilities
 n = insert_heat_pump_flexibilities_14a(n)
 
 snapshots = 24
@@ -113,6 +111,6 @@ n = plot_results(n)
 
 #export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
-#prepare_ding0_shape_export(n, '/home/student/Execution/LoMa_exe/results/MGB_model')
+prepare_ding0_shape_export(n, "./results/MGB_model")
 
 

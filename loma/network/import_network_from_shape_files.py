@@ -544,7 +544,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
            x = 0.05
            s_nom = 1
          
-        capital_costs = 1e12 #100_000*length_km/s_nom
+        capital_costs = 100000 # was 100_000*length_km/s_nom before
            
         n.add("Line", row['line_id'], bus0=bus0, bus1=bus1, carrier='AC',
               length=length_km, r=r, x=x, s_nom=s_nom, s_nom_min = s_nom, capital_cost = capital_costs, s_nom_extendable=True)
@@ -573,6 +573,8 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
               carrier="AC",
               HP = bus.HP,
               household_count = bus.household_count,
+              x = bus.x,
+              y = bus.y,
               geom = bus.geom)
         
         n.add("Transformer",
@@ -591,7 +593,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
               carrier="AC",
               p_nom=1e6, 
               marginal_cost=100)
-    
+
     #add carriers
     carriers = ["AC", "land_transport_EV", "14a", "home_battery", "solar_rooftop"]
     for c in carriers:
@@ -654,9 +656,7 @@ def import_ev_chargers(n):
     
     #use shapefile for ladesäulen
     return
-    
 
-    
 
 def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_folder, cable_types, household_count, export_shape_files, census_data):
     n = pypsa.Network()
@@ -685,9 +685,3 @@ def create_pypsa_network(shape_files_folder, q_households_folder, heat_pump_fold
     #n = open_LV_circle(n, 'line_163')
     
     return n
-    
-    
-    
-
-    
-    
