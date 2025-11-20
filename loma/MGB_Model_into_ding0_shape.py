@@ -10,6 +10,7 @@ import geopandas as gpd
 from pyproj import Transformer
 import pypsa
 import os
+import numpy as np
 
 ###translate pypsa network into ding0 shape
 
@@ -31,35 +32,30 @@ def add_dummy_mv_grid(n):
 
     
     # New MV-bus
-    mv_bus_name = "MV_dummy_bus"
+    mv_bus_name = "Busbar_mvgd_2095_MV"
     n.add("Bus",
           name=mv_bus_name,
           v_nom=20,           # 
           x=x_existing + 0.1, # etwas versetzt
           y=y_existing + 0.1,
-          carrier="AC")
-
-    # New Genertaor 
-    n.add("Generator",
-          name="MV_dummy_gen",
-          bus=mv_bus_name,
-          p_nom=1,            # 1 MW
           carrier="AC",
-          marginal_cost=50,
-          efficiency=0.9)
+          overwrite=True)
 
 
     # New MV-line connection
     n.add("Line",
-          name="MV_dummy_line",
-          bus0=existing_mv_bus,
-          bus1=mv_bus_name,
+          name="line_522",
+          bus0=mv_bus_name,
+          bus1=existing_mv_bus,
           x=0.004,
           r=0.005,
           s_nom=6.18342138302089,
           length=0.1,         
-          cable_type ="NA2XS2Y 3x1x185 RM/25")
-
+          cable_type ="NA2XS2Y 3x1x185 RM/25",
+          overwrite=True)
+    
+    hv_bus_name = "HV_dummy_bus"
+    '''
     # new trafo connection to HV-level
     hv_bus_name = "HV_dummy_bus"
     n.add("Bus",
@@ -67,15 +63,28 @@ def add_dummy_mv_grid(n):
           v_nom=110,
           x=x_existing + 0.1, 
           y=y_existing + 0.1,
-          carrier="AC")
-
+          carrier="AC",
+          overwrite=True)
+    
+    # New Genertaor 
+    n.add("Generator",
+          name="HV_dummy_gen_slack",
+          bus=hv_bus_name,
+          p_nom=1,            # 1 MW
+          carrier="AC",
+          control='Slack',
+          marginal_cost=50,
+          efficiency=0.9,
+          overwrite=True)
+    '''
     n.add("Transformer",
           name="MV_to_HV_dummy_trafo",
           bus0=hv_bus_name,
           bus1=mv_bus_name,
           s_nom=63,            # 2 MVA
           x=0.1,
-          r=0.01)
+          r=0.01,
+          overwrite=True)
 
     return n
 
@@ -86,23 +95,23 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     buses = pd.DataFrame(index=n.buses.index)
     buses['name'] = buses.index
     transformer = Transformer.from_crs("EPSG:32632", "EPSG:4326", always_xy=True)
-    buses['v_nom'] = buses['name'].apply(lambda x: 20 if "MS" in x else 0.4)
+    buses['v_nom'] = buses['name'].apply(lambda x: 10 if "MS" in x else(10 if 'MV' in x else 0.4))
     buses['x'] = n.buses.x
     buses['y']= n.buses.y
     buses['x'], buses['y'] = transformer.transform(buses['x'].values, buses['y'].values)
-    buses['mv_grid_id'] = None #mv_grid_id
-    buses['lv_grid_id'] = None #buses['name'].apply(lambda x: lv_grid_id if "MS" not in x else None)
-    buses['in_building'] = None #False
+    buses['mv_grid_id'] = 0 #mv_grid_id
+    buses['lv_grid_id'] = buses['name'].apply(lambda x: np.nan if "MS" in x else(np.nan if 'MV' in x else 1)) #toDo: check how to define this value the right way
+    buses['in_building'] = False 
     
     ## generators
     generators = pd.DataFrame(index=n.generators.index)
     generators['name'] = generators.index
     generators['bus'] = n.generators.bus
     generators['p_nom'] = n.generators.p_nom
-    generators['type'] = n.generators.carrier.apply(lambda x: 'solar' if 'solar_rooftop' in x else 'conventional')
+    generators['type'] = n.generators.carrier.apply(lambda x: 'solar' if 'solar_rooftop' in x else ('station' if x == 'AC' else 'conventional'))
     generators['control'] = n.generators.control
     generators['weather_cell_id'] = None
-    generators['sub_type'] = n.generators.carrier.apply(lambda x: 'pv_rooftop' if 'solar_rooftop' in x else 'unknown')
+    generators['subtype'] = n.generators.carrier.apply(lambda x: 'pv_rooftop' if 'solar_rooftop' in x else ('mv_substation' if x == 'AC' else 'unkown'))
     generators['source_id'] = None
     generators['voltage_level'] = generators['name'].apply(lambda x: 'lv' if "MS" not in x else 'mv')
     
@@ -148,26 +157,27 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     ### transformers lv/mv
     filtered_trafo_mv = n.transformers[~n.transformers.index.str.contains('dummy')]
     transformers = pd.DataFrame(index=filtered_trafo_mv.index)
-    transformers['name'] = transformers.index
-    transformers['bus0'] = n.transformers.bus0
-    transformers['bus1'] = n.transformers.bus1      
-    transformers['x'] = n.transformers.x
-    transformers['r'] = n.transformers.r
-    transformers['s_nom'] = n.transformers.s_nom
-    transformers['type'] = (transformers['s_nom'] * 1e3).astype(int).astype(str) + ' kVA' ##ToDo: check if this format fits to edigo requirements
+    transformers['name'] = filtered_trafo_mv.index
+    transformers['bus0'] = filtered_trafo_mv.bus0
+    transformers['bus1'] = filtered_trafo_mv.bus1      
+    transformers['x'] = filtered_trafo_mv.x
+    transformers['r'] = filtered_trafo_mv.r
+    transformers['s_nom'] = filtered_trafo_mv.s_nom
+    transformers['type'] = (transformers['s_nom'] * 1e3).astype(int).astype(str) + ' kVA'
+    transformers['type_info'] = (transformers['s_nom'] * 1e3).astype(int).astype(str) + ' kVA' ##ToDo: check if this format fits to edigo requirements
     
     
     ##transformer mv/hv
     filtered_trafo_hv = n.transformers[n.transformers.index.str.contains('dummy')]
-    transformers_hv = pd.DataFrame(index=filtered_trafo_hv)
+    transformers_hv = pd.DataFrame(index=filtered_trafo_hv.index)
     transformers_hv['name'] = transformers.index
-    transformers_hv['bus0'] = n.transformers.bus0
-    transformers_hv['bus1'] = n.transformers.bus1      
-    transformers_hv['x'] = n.transformers.x
-    transformers_hv['r'] = n.transformers.r
-    transformers_hv['s_nom'] = n.transformers.s_nom
-    transformers_hv['type'] = (transformers['s_nom'] * 1e3).astype(int).astype(str) + ' kVA'  ##ToDo: check if this format fits to edigo requirements
-    transformers_hv['type_info'] = transformers.type
+    transformers_hv['bus0'] = filtered_trafo_hv.bus0
+    transformers_hv['bus1'] = filtered_trafo_hv.bus1      
+    transformers_hv['x'] = filtered_trafo_hv.x
+    transformers_hv['r'] = filtered_trafo_hv.r
+    transformers_hv['s_nom'] = filtered_trafo_hv.s_nom
+    transformers_hv['type'] = (transformers_hv['s_nom'] * 1e3).astype(int).astype(str) + ' kVA'  ##ToDo: check if this format fits to edigo requirements
+    transformers_hv['type_info'] = (transformers_hv['s_nom'] * 1e3).astype(int).astype(str) + ' kVA'
     
     
     ### links (not part of ding0-Output so no template )
