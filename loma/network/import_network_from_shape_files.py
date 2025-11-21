@@ -738,6 +738,8 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
             "Bus",
             name=ms_bus,
             v_nom=20,
+            x = bus.x, 
+            y = bus.y,
             carrier="AC",
             HP=bus.HP,
             household_count=bus.household_count,
@@ -909,6 +911,6 @@ def create_pypsa_network(
         buses.to_file("results/grid_buses_test.shp")
         lines.to_file("results/grid_lines_test.shp")
     fix_grid_infrastructure(n)
-    # n = open_LV_circle(n, 'line_163')
+    #n = open_LV_circle(n, 'line_163')
 
     return n
