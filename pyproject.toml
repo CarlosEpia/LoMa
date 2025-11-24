@@ -25,7 +25,9 @@ dependencies = [
   "osmnx",
   "pypsa",
   "tables",
-  "glpk",
+  "highspy",
   "rapidfuzz",
+  "networkx",
+  "cartopy"
 ]
 dynamic = []

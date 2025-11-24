@@ -10,39 +10,56 @@ import networkx as nx
 import pandas as pd 
 ##### network connected consistently???
 # Erzeuge den Graph des Stromnetzes
-G = n.graph()
+G = nx.Graph()
 
-# Ist das Netzwerk vollständig verbunden?
 print("Ist Netzwerk zusammenhängend?", nx.is_connected(G))
   
 #Falls nicht: wie viele separate Teilgraphen?
 if not nx.is_connected(G):
-     components = list(nx.connected_components(G))
-     print(f"Anzahl Teilnetze: {len(components)}")
-     print("Größen der Teilnetze:", [len(c) for c in components]) 
-     
-     for i, comp in enumerate(components):
-        comp_sorted = sorted(comp)
-        print(f"\nTeilnetz {i+1}: ({len(comp)} Busse)")
-        print("Beispiel-Busse:", comp_sorted[:3])
-        
-        
-     ##delete small subnetworks
-     small_components = [comp for comp in components if len(comp) < 5]
-     small_buses = set().union(*small_components)
+    components = list(nx.connected_components(G))
+    print(f"Anzahl Teilnetze: {len(components)}")
+    print("Größen der Teilnetze:", [len(c) for c in components]) 
     
-     print(f"Entferne {len(small_components)} kleine Teilnetze mit insgesamt {len(small_buses)} Bussen.")
-     
-     lines_to_remove = n.lines[
+    for i, comp in enumerate(components):
+       comp_sorted = sorted(comp)
+       print(f"\nTeilnetz {i+1}: ({len(comp)} Busse)")
+       print("Beispiel-Busse:", comp_sorted[:3])
+        
+        
+        # Kleine Teilnetze identifizieren
+    small_components = [comp for comp in components if len(comp) < 10]
+    small_buses = set().union(*small_components)
+
+    print(f"\nEntferne {len(small_components)} kleine Teilnetze mit insgesamt {len(small_buses)} Bussen.")
+
+    # Verbundene Leitungen löschen
+    lines_to_remove = n.lines[
         n.lines.bus0.isin(small_buses) | n.lines.bus1.isin(small_buses)
-     ].index
+    ].index
+    n.remove("Line", list(lines_to_remove))
+
+    # Andere Komponenten löschen, die an diesen Bussen hängen
+    for comp in ["Load", "Generator", "StorageUnit", "Store", "Link"]:
+        if comp.lower() + "s" in n.components.keys():
+            df = getattr(n, comp.lower() + "s")
+            if "bus" in df.columns:
+                print('Yeah')
+                print(df[df.bus.isin(small_buses)])
+                idx = df[df.bus.isin(small_buses)].index
+                if len(idx) > 0:
+                    print(f"  → Entferne {len(idx)} {comp}s")
+                    n.remove(comp, list(idx))
+            elif {"bus0", "bus1"} <= set(df.columns):  # für Links oder ähnliche
+                idx = df[df.bus0.isin(small_buses) | df.bus1.isin(small_buses)].index
+                if len(idx) > 0:
+                    print(f"  → Entferne {len(idx)} {comp}s (bus0/bus1) ")
+                    n.remove(comp, list(idx))
+
+    # Jetzt die Busse selbst löschen
+    n.remove("Bus", list(small_buses))
+    print("Busse gelöscht.")
+
     
-     # Löschen
-     n.remove("Line", list(lines_to_remove))
-    
-     # Busse (und alles, was an ihnen hängt) aus dem Netzwerk löschen
-     n.remove("Bus", list(small_buses))
-     
      
      
      

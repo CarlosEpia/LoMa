@@ -141,7 +141,7 @@ def insert_ind_demand_per_building(n, path_to_MV_district, region_nuts3):
         geometry=gpd.points_from_xy(n.buses.x, n.buses.y),
         crs="EPSG:32632" 
     )
-    con_buses_gdf = buses_gdf[buses_gdf.comp_type=='house_connection']
+    con_buses_gdf = buses_gdf[buses_gdf.comp_type.isin(['house_connection', 'trafo'])]
     
     # connect each load to closest bus if distance < ....
     for _, row in timeseries_gdf.iterrows():
@@ -155,11 +155,12 @@ def insert_ind_demand_per_building(n, path_to_MV_district, region_nuts3):
             chosen_bus = distances.idxmin()  # Name des nächsten Busses
         else:
             distances = con_buses_gdf.geometry.distance(polygon_centroid)
-            nearest_buses = distances[distances < 1000]
+            nearest_buses = distances[distances < 100]
             if not nearest_buses.empty:
                 chosen_bus = nearest_buses.idxmin()
             else:
                 chosen_bus = None
+                print(f"⚠️ No nearby bus found for connecting industrial load {row['osm_id']} (osm_id); ...skipped")
 
         if chosen_bus is not None:
             load_name = f"Ind_Load_{chosen_bus}_{row['osm_id']}"
@@ -171,10 +172,13 @@ def insert_ind_demand_per_building(n, path_to_MV_district, region_nuts3):
                 p_set=0.0
             )
             n.loads_t.p_set[load_name] = pd.Series(ts, index=n.snapshots)
+            
+            #secure that no household demand is connected to the same bus
+            if "household_count" in n.buses.columns:
+                n.buses.loc[chosen_bus, "household_count"] = 0
+                
     print('''
-          
-          Industrial loads are successfully imported
-          
+          ✅ Industrial loads are successfully imported
           ''')
             
     return n
