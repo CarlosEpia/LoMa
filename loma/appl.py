@@ -108,10 +108,8 @@ n.optimize(
     extra_functionality=load_reduction_constraint_14a,
 )
 
-n = plot_results(n)
+plot_results(n)
 
 # export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
 prepare_ding0_shape_export(n, "./results/MGB_model")
-
-
