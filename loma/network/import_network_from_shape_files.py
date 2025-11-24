@@ -885,6 +885,7 @@ def create_pypsa_network(
     census_data,
 ):
     n = pypsa.Network()
+    n.to_crs(32632)
     time_index = pd.date_range("2023-01-01", periods=8760, freq="h")
     n.snapshots = time_index
 
