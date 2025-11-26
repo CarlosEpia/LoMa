@@ -784,6 +784,9 @@ def open_LV_circle(n, lv_line_idx):
     return n
 
 
+
+
+
 def fix_grid_infrastructure(n, min_size=10):
     # Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
@@ -908,9 +911,17 @@ def create_pypsa_network(
     if export_shape_files:
         os.makedirs("results", exist_ok=True)
         buses = buses.drop(columns=["geometry"])
-        buses.to_file("results/grid_buses_test.shp")
-        lines.to_file("results/grid_lines_test.shp")
+        buses.to_file("results/grid_buses_test_MGB.shp")
+        lines.to_file("results/grid_lines_test_MGB.shp")
     fix_grid_infrastructure(n)
-    #n = open_LV_circle(n, 'line_163')
-
+    
+    ###implement switches for Margarethe Böhme Model
+    if "V2" not in str(shape_files_folder):
+        n = open_LV_circle(n, 'line_163')
+        n = open_LV_circle(n, 'line_84')
+        n = open_LV_circle(n, 'line_214')
+        n = open_LV_circle(n, 'line_176')
+        n = open_LV_circle(n, 'line_93')
+        
+        
     return n

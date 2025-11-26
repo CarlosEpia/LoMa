@@ -189,7 +189,7 @@ def add_heat_loads_to_network(n):
         cop_air = calculate_cop_air(temp_air["TT_TU"])
         elec_profile = hourly_profile / cop_air
         
-        if elec_profile.max() < 0.0005:
+        if elec_profile.max() < 0.0005:   #ToDo: Discuss if adjustemnt of value is necessary
             scaling_factor = avg_hp_capcity/cop_air/elec_profile.max()
             elec_profile = elec_profile * scaling_factor
         # Write into matrix

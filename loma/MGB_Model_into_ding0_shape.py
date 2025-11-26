@@ -29,7 +29,7 @@ def add_dummy_mv_grid(n):
     # Optional: Use coordinates from existing Mv_bus
     x_existing = n.buses.at[existing_mv_bus, 'x'] if 'x' in n.buses.columns else 0
     y_existing = n.buses.at[existing_mv_bus, 'y'] if 'y' in n.buses.columns else 0
-
+    
     
     # New MV-bus
     mv_bus_name = "Busbar_mvgd_2095_MV"
@@ -201,6 +201,12 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     transformers.to_csv(os.path.join(export_path, "transformers.csv"), index=False)
     transformers_hv.to_csv(os.path.join(export_path, "transformers_hvmv.csv"), index=False)
     links.to_csv(os.path.join(export_path, "links.csv"), index=False)
+    #extra folder for storage_units.csv
+    storage_folder = os.path.join(export_path, "storage_units_folder")
+    os.makedirs(storage_folder, exist_ok=True)
+    n.storage_units.to_csv(os.path.join(storage_folder, "storage_units.csv"), index=False)
+ 
+
     
     
     
