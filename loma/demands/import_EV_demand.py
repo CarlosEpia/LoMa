@@ -123,9 +123,16 @@ def import_EV_demands(n):
         # Profil in DataFrame speichern
         ev_profiles_df[row.Index] = ev_profile
 
+        # Coordinates of the network bus
+        x = n.buses.at[row.bus, "x"]
+        y = n.buses.at[row.bus, "y"]
+        
         # --- EV-Bus hinzufügen ---
         ev_bus_name = f"EV_{row.bus}_{i}"
-        n.add("Bus", ev_bus_name)
+        n.add("Bus", 
+              ev_bus_name,
+              x=x,
+              y=y)
         
         # --- EV-Load hinzufügen ---
         n.add("Load",
@@ -134,7 +141,7 @@ def import_EV_demands(n):
               carrier=row.carrier,
               p_set=ev_profile)
 
-        # --- Link: physikalischer Bus -> EV-Bus ---
+        # --- Link: Network-Bus -> EV-Bus ---
         n.add("Link",
               f"Link_{ev_bus_name}_{i}",
               bus0=row.bus,
@@ -147,7 +154,10 @@ def import_EV_demands(n):
 
         # --- Store-Bus hinzufügen ---
         par14_store_bus = f"Par14_Store_{row.bus}_{i}"
-        n.add("Bus", par14_store_bus)
+        n.add("Bus", 
+              par14_store_bus,
+              x=x,
+              y=y)
 
         # --- Store hinzufügen ---
         n.add("Store",
@@ -156,7 +166,7 @@ def import_EV_demands(n):
               e_nom=e_nom_par14_store,
               e_initial=e_nom_par14_store)  
         
-        # --- Link: Store -> EV ---
+        # --- Link: Store-Bus -> EV-Bus ---
         n.add("Link",
               f"Par14_StoreDischarge_Link_{row.bus}_{i}",
               bus0=par14_store_bus,
@@ -166,7 +176,7 @@ def import_EV_demands(n):
               efficiency = np.sqrt(charge_efficiency),
               )          
         
-        # --- Link: EV_Bus -> Store ---
+        # --- Link: EV-Bus -> Store-Bus ---
         n.add("Link",
               f"EV_to_StoreCharge_Link_{row.bus}_{i}",
               bus0=ev_bus_name,

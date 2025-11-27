@@ -24,6 +24,7 @@ from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
     insert_pv_rooftop_and_battery,
 )
 from loma.MGB_Model_into_ding0_shape import prepare_ding0_shape_export
+from loma.plot_results import plot_results
 
 args = {
     "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V2",  # define path of shapefiles for grid infrastructure (related to execution folder)
@@ -99,6 +100,7 @@ n = import_EV_demands(n)
 # insert heat pump flexibilities
 n = insert_heat_pump_flexibilities_14a(n)
 
+snapshots = 24
 # Optimize
 n.optimize(
     snapshots=n.snapshots[12:17],
@@ -106,7 +108,8 @@ n.optimize(
     extra_functionality=load_reduction_constraint_14a,
 )
 
+plot_results(n)
 
 # export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
-prepare_ding0_shape_export(n, "/home/student/Execution/LoMa_exe/results/MGB_model")
+prepare_ding0_shape_export(n, "./results/MGB_model")

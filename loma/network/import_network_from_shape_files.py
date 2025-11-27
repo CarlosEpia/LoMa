@@ -695,30 +695,20 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
             )  # MW
 
         else:
-            # ToDo: define reasonable default-values
-            r = 0.3
-            x = 0.05
-            s_nom = 1
 
-        capital_costs = 100_000 * length_km / s_nom
-
-        n.add(
-            "Line",
-            row["line_id"],
-            bus0=bus0,
-            bus1=bus1,
-            carrier="AC",
-            length=length_km,
-            r=r,
-            x=x,
-            s_nom=s_nom,
-            s_nom_min=s_nom,
-            capital_cost=capital_costs,
-        )
-        n.lines.at[row["line_id"], "comp_type"] = row["comp_type"]
-        n.lines.at[row["line_id"], "geom"] = row["geometry"]
-        n.lines.at[row["line_id"], "cable_type"] = row["KABELTYP"]
-
+           # ToDo: define reasonable default-values
+           r = 0.3
+           x = 0.05
+           s_nom = 1
+         
+        capital_costs = 100000 # was 100_000*length_km/s_nom before
+           
+        n.add("Line", row['line_id'], bus0=bus0, bus1=bus1, carrier='AC',
+              length=length_km, r=r, x=x, s_nom=s_nom, s_nom_min = s_nom, capital_cost = capital_costs, s_nom_extendable=True)
+        n.lines.at[row["line_id"], 'comp_type'] = row['comp_type']
+        n.lines.at[row["line_id"], 'geom'] = row['geometry']
+        n.lines.at[row["line_id"], 'cable_type'] = row['KABELTYP']
+        
         ##for validating
         lines.at[idx, "bus_0"] = bus0
         lines.at[idx, "bus_1"] = bus1
@@ -733,40 +723,36 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
         lv_bus = bus.name
         ms_bus = f"{lv_bus}_MS"  # dummy bus for now
         s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
-
-        n.add(
-            "Bus",
-            name=ms_bus,
-            v_nom=20,
-            x = bus.x, 
-            y = bus.y,
-            carrier="AC",
-            HP=bus.HP,
-            household_count=bus.household_count,
-            geom=bus.geom,
-        )
-
-        n.add(
-            "Transformer",
-            name=f"trafo_{lv_bus}",
-            bus0=ms_bus,
-            bus1=lv_bus,
-            x=0.03864647477581,  # example vlaues from dingo
-            r=0.0103174603174603,
-            s_nom=s_nom,
-        )
-
+        
+        n.add("Bus",
+              name=ms_bus,
+              v_nom=20,  
+              carrier="AC",
+              HP = bus.HP,
+              household_count = bus.household_count,
+              x = bus.x,
+              y = bus.y,
+              geom = bus.geom)
+        
+        n.add("Transformer",
+              name=f"trafo_{lv_bus}",
+              bus0=ms_bus,  
+              bus1=lv_bus,   
+              x=0.03864647477581,        #example vlaues from dingo
+              r=0.0103174603174603,
+              s_nom=s_nom,
+              s_nom_extendable=True)
+        
         # 3. Generator am MS-Bus anschließen
-        n.add(
-            "Generator",
-            name=f"gen_{idx}",
-            bus=ms_bus,
-            carrier="AC",
-            p_nom=1e6,
-            marginal_cost=100,
-        )
+        n.add("Generator", 
+              name=f"gen_{idx}",
+              bus=ms_bus,
+              carrier="AC",
+              p_nom=1e6, 
+              marginal_cost=100)
 
-    # add carriers
+    #add carriers
+
     carriers = ["AC", "land_transport_EV", "14a", "home_battery", "solar_rooftop"]
     for c in carriers:
         n.add("Carrier", c)
@@ -913,5 +899,5 @@ def create_pypsa_network(
         lines.to_file("results/grid_lines_test.shp")
     fix_grid_infrastructure(n)
     #n = open_LV_circle(n, 'line_163')
-
+    
     return n
