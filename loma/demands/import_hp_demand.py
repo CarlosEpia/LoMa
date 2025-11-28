@@ -5,69 +5,160 @@ Created on Wed Aug 20 10:27:02 2025
 
 @author: student
 """
+import os
 import pandas as pd
 import geopandas as gpd
-import re
 import numpy as np
 
-from loma.demands.household_count import parse_bus_numbers, hausnummer_split
+from loma.demands.household_count import parse_bus_numbers
 
 
 def check_heat_pumps(buses, input_path):
+    """
+    Assigns Heat Pumps to buses based on input CSV or fallback shapefile.
 
-    hp_df = pd.read_csv("data/Input_files/heat_pumps.csv")
-    buses = buses.rename(
-        columns={"HAUSNUMMER": "Hausnummer", "Strasse": "Straße"}
-    )
+    Priority:
+    1. If 'heat_pumps.csv' exists, use it.
+    2. Otherwise, use 'hp_2035.shp' fallback.
+    """
+
     con_buses = buses[buses.comp_type == "house_connection"].copy()
-    con_buses["Straße"] = con_buses["Straße"].str.replace("Strasse", "Straße")
-    con_buses["parsed_numbers"] = con_buses["Hausnummer"].apply(
-        parse_bus_numbers
-    )
-    hp_df["parsed_numbers"] = hp_df["Hnr."].apply(parse_bus_numbers)
+    con_buses["HP"] = 0  # Initialize HP column
+    con_buses["hp_capacity"] = 0.0
+    
+    csv_path = input_path
+    folder = os.path.dirname(input_path)
+    
+    if os.path.isfile(csv_path):  # Use CSV if available
+        hp_df = pd.read_csv(csv_path)
+        buses = buses.rename(columns={"HAUSNUMMER": "Hausnummer", "Strasse": "Straße"})
+        con_buses["Straße"] = con_buses["Straße"].str.replace("Strasse", "Straße")
+        con_buses["parsed_numbers"] = con_buses["Hausnummer"].apply(parse_bus_numbers)
+        hp_df["parsed_numbers"] = hp_df["Hnr."].apply(parse_bus_numbers)
+        hp_df = hp_df[hp_df.WP == "ja"]
 
-    # create Heat_pump column
-    con_buses["HP"] = 0
-    hp_df = hp_df[hp_df.WP == "ja"]
+        for idx, row in hp_df.iterrows():
+            street = row["Straße"]
+            num_list = row["parsed_numbers"]
+            street_buses = con_buses[con_buses.Straße == street]
 
-    for idx, row in hp_df.iterrows():
-        street = row["Straße"]
-        num_list = row["parsed_numbers"]
-        street_buses = con_buses[con_buses.Straße == street]
+            if len(num_list) == 0 or street_buses.empty:
+                continue
 
-        if len(num_list) == 0:
-            continue
-        if street_buses.empty:
-            continue
+            # 1) try to find exact match (Number, letter))
+            found = False
+            for num in num_list:
+                exact_matches = street_buses[
+                    street_buses.parsed_numbers.apply(lambda nums: num in nums)
+                ]
+                if not exact_matches.empty:
+                    con_buses.loc[exact_matches.index, "HP"] = 1
+                    found = True
+                    break
 
-        # 1) try to find exact match (Number, letter))
-        found = False
-        for num in num_list:
-            exact_matches = street_buses[
-                street_buses.parsed_numbers.apply(lambda nums: num in nums)
-            ]
+            if not found:
+                print(f"Warning: No Match found for Heat_pump in {street} {num_list}")
+                
+    else:
+        print("CSV input not found. Using fallback shapefile 'hp_2035.shp'.")
 
-            if not exact_matches.empty:
-                con_buses.loc[exact_matches.index, "HP"] = 1
-                found = True
-                break
+        shp_path = os.path.join(folder, "hp_husum_2035", "hp_2035.shp")  # 
 
-        if not found:
-            print(
-                f"Warning: No Match found for Heat_pump in {street} {num_list}"
+        if not os.path.isfile(shp_path):
+            raise FileNotFoundError(
+                f"Neither CSV nor fallback shapefile found.\n"
+                f"Missing:\n  - {csv_path}\n  - {shp_path}"
             )
 
-        ########## check if an fallback option is neccessary for other LV-Region
+        fallback_hp = gpd.read_file(shp_path)
+        fallback_hp = fallback_hp.rename(
+            columns={"building_i": "building_id", "hp_capacit": "hp_capacity"}
+        )
 
-        # Fallback: just compare number without letter
-        # number_matches = street_buses[
-        # street_buses['parsed_numbers'].apply(lambda nums: any(n == num for n, _ in nums))
-        # ]
-        # if not number_matches.empty:
-        #  buses.loc[number_matches.index, 'house_count'] += 1
-        # continue
-    hp_bus_ids = con_buses[con_buses.HP == 1].bus_id.to_list()
-    buses["HP"] = buses["bus_id"].isin(hp_bus_ids).astype(int)
+        if "hp_capacity" not in fallback_hp.columns:
+            fallback_hp["hp_capacity"] = 0.0
+
+        # Convert buses to GeoDataFrame
+        bus_gdf = gpd.GeoDataFrame(
+            con_buses,
+            geometry=gpd.points_from_xy(con_buses.geometry.x, con_buses.geometry.y),
+            crs=fallback_hp.crs
+        )
+
+        if "bus_id" in bus_gdf.columns:
+            bus_gdf["_bus_id_map"] = bus_gdf["bus_id"]
+        else:
+            bus_gdf["_bus_id_map"] = bus_gdf.index.astype(str)
+    
+        # Initialize columns on bus_gdf
+        bus_gdf["hp_capacity"] = 0.0
+        bus_gdf["HP"]= 0
+        
+        max_dist = 25
+        assigned_hp={} 
+        
+        for hp_idx, hp in fallback_hp.iterrows():
+            hp_geom = hp.geometry
+            hp_cap = hp.get("hp_capacity", 0)
+
+            if hp_cap <= 0:
+                continue
+
+            # Distance from THIS HP to ALL buses
+            bus_gdf["__dist"] = bus_gdf.geometry.distance(hp_geom)
+
+            # Find nearest bus
+            nearest_idx = bus_gdf["__dist"].idxmin()
+            nearest_dist = bus_gdf.loc[nearest_idx, "__dist"]
+
+            # Only assign if within allowed distance
+            if nearest_dist <= max_dist:
+                bus_gdf.loc[nearest_idx, "hp_capacity"] += hp_cap
+                bus_gdf.loc[nearest_idx, "HP"] = 1
+                assigned_hp[hp_idx] = nearest_idx
+
+        # Cleanup
+        bus_gdf = bus_gdf.drop(columns=["__dist"], errors="ignore")
+
+        # Write results back
+        con_buses["HP"] = bus_gdf["HP"].values
+        con_buses["hp_capacity"] = bus_gdf["hp_capacity"].values
+
+    # Update full buses dataframe
+    if "bus_id" in con_buses.columns:
+        hp_bus_ids = con_buses[con_buses.HP == 1].bus_id.to_list()
+        buses["HP"] = buses["bus_id"].isin(hp_bus_ids).astype(int)
+    else:
+        # fallback: use index labels
+        hp_bus_ids = con_buses[con_buses.HP == 1].index.tolist()
+        buses["HP"] = buses.index.isin(hp_bus_ids).astype(int)
+            
+    # Add capacity and source columns if fallback was used
+    if "hp_capacity" in con_buses.columns:
+        if "bus_id" in con_buses.columns:
+            buses = buses.merge(
+                con_buses[["bus_id", "hp_capacity"]],
+                on="bus_id",
+                how="left",
+            )
+        else:
+            # if bus_id not present, add hp cols by index alignment
+            buses["hp_capacity"] = 0.0
+            for idx in con_buses.index:
+                cap = con_buses.loc[idx, "hp_capacity"]
+                if cap > 0 and idx in buses.index:
+                    buses.at[idx, "hp_capacity"] = cap
+                             
+        buses["hp_capacity"] = buses["hp_capacity"].fillna(0)
+
+    # # Add capacity column if fallback was used
+    # if "hp_capacity" in con_buses.columns:  
+    #     buses = buses.merge(
+    #         con_buses[["bus_id", "hp_capacity"]],
+    #         on="bus_id",
+    #         how="left"
+    #     )
+    #     buses["hp_capacity"] = buses.get("hp_capacity", 0.0)
 
     return buses
 
@@ -123,24 +214,41 @@ def add_heat_loads_to_network(n):
 
     # Spatial mapping: Bus → Census cell
     bus_with_cell = gpd.sjoin_nearest(bus_gdf, heat_demand_cells, how="left")
+    bus_with_cell = bus_with_cell[~bus_with_cell.index.duplicated(keep="first")]
+    
+    # Save original left-index (these are the bus IDs/labels from the network)
+    left_bus_ids = list(bus_with_cell.index)
 
+    # Reset index to get a simple RangeIndex for iteration and for load_profiles columns
+    bus_with_cell = bus_with_cell.reset_index(drop=True)
+    
     # Initialize load time series
     snapshots = n.snapshots
     n_hours = len(snapshots)
+    n_buses = len(bus_with_cell)
     load_profiles = pd.DataFrame(
+
         0.0, index=snapshots, columns=bus_with_cell.index
     )
     
     #avg heat-demand for calculating a scaling_factor for areas with really low heat_demand due to old census-data
     avg_hp_capcity = 0.0122 #acccording to "Technology Assessment Report - e-HIGHWAY 2050 , Technofi, 2015"
 
+
     
     # Create a profile for each bus
     used_profiles = {}
     for bus_idx, row in bus_with_cell.iterrows():
+        try:
+            bus_id = left_bus_ids[bus_idx]
+        except IndexError:
+            # Sicherheitsnetz: falls Mapping aus irgendeinem Grund nicht passt
+            print(f"IndexError: Kein bus_id für Spalte {bus_idx}; überspringe.")
+            continue
+        
         zensus_id = row["zensus_pop"]
         annual_demand = row["demand"]
-        if pd.isna(annual_demand):
+        if pd.isna(annual_demand) or pd.isna(zensus_id):
             continue
 
         # Daily profiles for this cell
@@ -196,13 +304,12 @@ def add_heat_loads_to_network(n):
         elec_profile.index = load_profiles.index
         load_profiles.loc[:, bus_idx] = elec_profile[:n_hours]
         
-        
 
         # Add load to the network
         n.add(
             "Load",
-            name=f"heat_load_{bus_idx}",
-            bus=bus_idx,
+            name=f"heat_load_{bus_id}",
+            bus=bus_id,
             carrier="AC",
             p_set=load_profiles[bus_idx],
         )
