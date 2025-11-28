@@ -147,93 +147,33 @@ def import_EV_demands(n, *, factor=1.0, e_nom_par14_store=1.0, master_seed=42,
         # Saving profil in DataFrame
         ev_profiles_df[load_name] = ev_profile
 
-        # Adding EV bus
-        ev_bus_name = f"EV_{row.bus}_{i}"
-        if ev_bus_name not in n.buses.index:
-            x = n.buses.at[row.bus, "x"]
-            y = n.buses.at[row.bus, "y"]
-            n.add("Bus", ev_bus_name, x=x, y=y)
-            n.buses.at[ev_bus_name, "geom"] = n.buses.at[row.bus, "geom"]
-
-        # Connect EV load to EV bus instead of network bus (reassign)
-        n.loads.at[load_name, 'bus'] = ev_bus_name
-
         # Replace static p_set with timeseries
         if load_name not in n.loads_t.p_set.columns:
             n.loads_t.p_set[load_name] = 0.0
         n.loads_t.p_set[load_name] = ev_profile
-
-        # Adding Link: Network bus -> EV bus
-        peak_mw = float(ev_profile.max()) if len(ev_profile) > 0 else static_p_set
-        p_nom_link = peak_mw / max(charge_efficiency, 1e-9)
-
-        n.add("Link",
-              f"Link_{ev_bus_name}_{i}",
-              bus0=row.bus,
-              bus1=ev_bus_name,
-              p_nom=p_nom_link,
-              p_nom_extendable=False,
-              efficiency=charge_efficiency,
-              p_max_pu=ev_connection,
-              )
-
-        # Adding Store-Bus
-        par14_store_bus = f"Par14_Store_{row.bus}_{i}"
-        if par14_store_bus not in n.buses.index:
-            x = n.buses.at[row.bus, "x"]
-            y = n.buses.at[row.bus, "y"]
-            n.add("Bus", par14_store_bus, x=x, y=y)
-
-        # Adding Store
-        n.add("Store",
-              f"Par14_Store_at_{row.bus}_{i}",
-              bus=par14_store_bus,
-              e_nom=e_nom_par14_store,
-              e_initial=e_nom_par14_store)
-
-        # Adding Link: Store bus -> EV bus (Discharge)
-        p_nom_store = max(static_p_set, peak_mw)
-        n.add("Link",
-              f"Par14_StoreDischarge_Link_{row.bus}_{i}",
-              bus0=par14_store_bus,
-              bus1=ev_bus_name,
-              p_nom=p_nom_store,
-              p_max_pu=0.6,
-              efficiency=np.sqrt(charge_efficiency),
-              )
-
-        # Adding Link: EV-Bus -> Store bus (Charge)
-        n.add("Link",
-              f"Par14_StoreCharge_Link_{row.bus}_{i}",
-              bus0=ev_bus_name,
-              bus1=par14_store_bus,
-              p_nom=p_nom_store,
-              p_max_pu=ev_connection,
-              efficiency=np.sqrt(charge_efficiency),
-              )
     
 
-    # ############### OPTIONAL EXPORT TO CHECK RESULTS ###############
-    # # Exportiere ev_profiles_df, falls gewünscht
-    # if export_profiles:
-    #     os.makedirs(export_path, exist_ok=True)
-    #     csv_path = os.path.join(export_path, 'ev_profiles.csv')
+    ############### OPTIONAL EXPORT TO CHECK RESULTS ###############
+    # Exportiere ev_profiles_df, falls gewünscht
+    if export_profiles:
+        os.makedirs(export_path, exist_ok=True)
+        csv_path = os.path.join(export_path, 'ev_profiles.csv')
 
-    #     try:
-    #         ev_profiles_df.to_csv(csv_path, index=True)
-    #         print(f"ev_profiles_df als CSV gespeichert: {csv_path}")
-    #     except Exception as e:
-    #         print(f"Fehler beim Speichern als CSV: {e}")
+        try:
+            ev_profiles_df.to_csv(csv_path, index=True)
+            print(f"ev_profiles_df als CSV gespeichert: {csv_path}")
+        except Exception as e:
+            print(f"Fehler beim Speichern als CSV: {e}")
 
-    # # Kurzer Check: Ausgabe der ersten 10 Loads mit Profilinfo
-    # print('\n=== Kurzer EV-Load Check ===')
-    # for load_name, row in n.loads[n.loads['carrier'] == 'land_transport_EV'].head(10).iterrows():
-    #     p = row['p_set']
-    #     if isinstance(p, pd.Series):
-    #         print(f"{load_name}: Zeitprofil mit {len(p)} Zeitpunkten, peak={p.max():.4f} MW at {p.idxmax()}")
-    #     else:
-    #         print(f"{load_name}: statischer p_set = {p}")
-    # ################################################################
+    # Kurzer Check: Ausgabe der ersten 10 Loads mit Profilinfo
+    print('\n=== Kurzer EV-Load Check ===')
+    for load_name, row in n.loads[n.loads['carrier'] == 'land_transport_EV'].head(10).iterrows():
+        p = row['p_set']
+        if isinstance(p, pd.Series):
+            print(f"{load_name}: Zeitprofil mit {len(p)} Zeitpunkten, peak={p.max():.4f} MW at {p.idxmax()}")
+        else:
+            print(f"{load_name}: statischer p_set = {p}")
+    ################################################################
 
 
     return n
