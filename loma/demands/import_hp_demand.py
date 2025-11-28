@@ -227,9 +227,9 @@ def add_heat_loads_to_network(n):
     n_hours = len(snapshots)
     n_buses = len(bus_with_cell)
     load_profiles = pd.DataFrame(
-        0.0, index=snapshots, columns=range(n_buses)
-        )
 
+        0.0, index=snapshots, columns=bus_with_cell.index
+    )
     
     #avg heat-demand for calculating a scaling_factor for areas with really low heat_demand due to old census-data
     avg_hp_capcity = 0.0122 #acccording to "Technology Assessment Report - e-HIGHWAY 2050 , Technofi, 2015"
@@ -238,12 +238,12 @@ def add_heat_loads_to_network(n):
     
     # Create a profile for each bus
     used_profiles = {}
-    for col_idx, row in bus_with_cell.iterrows():
+    for bus_idx, row in bus_with_cell.iterrows():
         try:
-            bus_id = left_bus_ids[col_idx]
+            bus_id = left_bus_ids[bus_idx]
         except IndexError:
             # Sicherheitsnetz: falls Mapping aus irgendeinem Grund nicht passt
-            print(f"IndexError: Kein bus_id für Spalte {col_idx}; überspringe.")
+            print(f"IndexError: Kein bus_id für Spalte {bus_idx}; überspringe.")
             continue
         
         zensus_id = row["zensus_pop"]
@@ -296,26 +296,22 @@ def add_heat_loads_to_network(n):
         ).set_index("MESS_DATUM")
         cop_air = calculate_cop_air(temp_air["TT_TU"])
         elec_profile = hourly_profile / cop_air
-
-        # Make pandas Series with snapshots index (ensure length matches)
-        elec_series = pd.Series(elec_profile, index=load_profiles.index)
-        elec_series = elec_series.iloc[:n_hours]
         
-        if elec_series.max() < 0.0005:
+        if elec_profile.max() < 0.0005:
             scaling_factor = avg_hp_capcity/cop_air/elec_profile.max()
-            elec_profile = elec_series* scaling_factor
+            elec_profile = elec_profile * scaling_factor
+        # Write into matrix
+        elec_profile.index = load_profiles.index
+        load_profiles.loc[:, bus_idx] = elec_profile[:n_hours]
+        
 
-        # Assign into integer column position (single column) -> avoids ambiguous label selection
-        load_profiles.iloc[:, col_idx] = elec_series.values
-
-    
         # Add load to the network
         n.add(
             "Load",
             name=f"heat_load_{bus_id}",
             bus=bus_id,
             carrier="AC",
-            p_set=load_profiles.iloc[:, col_idx],
+            p_set=load_profiles[bus_idx],
         )
 
     return n
