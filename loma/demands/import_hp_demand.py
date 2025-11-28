@@ -230,7 +230,12 @@ def add_heat_loads_to_network(n):
         0.0, index=snapshots, columns=range(n_buses)
         )
 
+    
+    #avg heat-demand for calculating a scaling_factor for areas with really low heat_demand due to old census-data
+    avg_hp_capcity = 0.0122 #acccording to "Technology Assessment Report - e-HIGHWAY 2050 , Technofi, 2015"
 
+
+    
     # Create a profile for each bus
     used_profiles = {}
     for col_idx, row in bus_with_cell.iterrows():
@@ -295,10 +300,15 @@ def add_heat_loads_to_network(n):
         # Make pandas Series with snapshots index (ensure length matches)
         elec_series = pd.Series(elec_profile, index=load_profiles.index)
         elec_series = elec_series.iloc[:n_hours]
+        
+        if elec_series.max() < 0.0005:
+            scaling_factor = avg_hp_capcity/cop_air/elec_profile.max()
+            elec_profile = elec_series* scaling_factor
 
         # Assign into integer column position (single column) -> avoids ambiguous label selection
         load_profiles.iloc[:, col_idx] = elec_series.values
 
+    
         # Add load to the network
         n.add(
             "Load",

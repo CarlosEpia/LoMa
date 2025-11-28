@@ -56,18 +56,19 @@ args = {
 }
 
 
-#household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
-household_dist_df = create_household_dist(args['path_to_shapefile_MV_grid'])
+# household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
+household_dist_df = create_household_dist(args["path_to_shapefile_MV_grid"])
 
-#create pypsa network with grid topology shapefilees
+# create pypsa network with grid topology shapefilees
 n = create_pypsa_network(
-    args['path_to_shapefiles_grid'], 
-    args['path_to_household_data'], 
-    args['path_to_heat_pump_data'], 
-    args['Kabeltypen'], 
-    args['use_census_household_data'], 
-    args['export_shape_files_grid'], 
-    household_dist_df)
+    args["path_to_shapefiles_grid"],
+    args["path_to_household_data"],
+    args["path_to_heat_pump_data"],
+    args["Kabeltypen"],
+    args["use_census_household_data"],
+    args["export_shape_files_grid"],
+    household_dist_df,
+)
 
 # insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
@@ -82,12 +83,12 @@ n = insert_pv_rooftop_and_battery(
 n = distribute_household_demand(n, household_dist_df)
 
 # insert cts demand
-#n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
+# n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
 
 # insert industrial demands
-#n = insert_ind_demand_per_building(
+# n = insert_ind_demand_per_building(
 #    n, args["path_to_shapefile_MV_grid"], args["nuts3_focus_region"]
-#)
+# )
 
 # insert_heat_loas_for_heat_pump_location
 n = add_heat_loads_to_network(n)
@@ -96,23 +97,19 @@ n = add_heat_loads_to_network(n)
 n = import_EV_loads(n, args["path_to_shapefiles_grid"])
 n = import_EV_demands(n)
 
-# # insert heat pump flexibilities
-#heat_loads = n.loads[n.loads.index.str.contains("heat")]
-#n.loads_t["p_set"].loc[:,heat_loads.index] = n.loads_t["p_set"].loc[:,heat_loads.index] * 50
+# insert heat pump flexibilities
 n = insert_heat_pump_flexibilities_14a(n)
 
 snapshots = 24
 # Optimize
 n.optimize(
-    snapshots=n.snapshots[:snapshots],
-    solver_name="glpk",
+    snapshots=n.snapshots[12:17],
+    solver_name="highs",
     extra_functionality=load_reduction_constraint_14a,
 )
 
-n = plot_results(n)
+plot_results(n)
 
-#export model into ding0_shape ####
+# export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
-#prepare_ding0_shape_export(n, '/home/student/Execution/LoMa_exe/results/MGB_model')
-
-
+prepare_ding0_shape_export(n, "./results/MGB_model")

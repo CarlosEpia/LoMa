@@ -43,8 +43,6 @@ def plot_results(n):
     axL.set_ylabel("Power [MW]")
     axL.set_xlabel("Time")
     plt.tight_layout()
-
-    #plt.show()
     
     #export plot to results folder
     os.makedirs('results', exist_ok=True)
