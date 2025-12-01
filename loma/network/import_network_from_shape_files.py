@@ -902,6 +902,11 @@ def create_pypsa_network(
         lines.to_file("results/grid_lines_test_MGB.shp")
     fix_grid_infrastructure(n)
     
+    
+    
+    #####
+    # Just for the test case in Margarethe Böhme Straße
+    #####
     ###implement switches for Margarethe Böhme Model
     if "V2" not in str(shape_files_folder):
         n = open_LV_circle(n, 'line_163')
