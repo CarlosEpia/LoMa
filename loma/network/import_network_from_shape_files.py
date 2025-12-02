@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import pypsa
 from scipy.spatial import cKDTree
+from joblib import Parallel, delayed
 from shapely.geometry import LineString, Point
 from shapely.strtree import STRtree
 from shapely.ops import linemerge, unary_union
@@ -563,44 +564,34 @@ def map_load_bus_to_network_bus(buses, lines):
     return filtered_buses
 
 
-def get_nearest_bus_robust(point, bus_gdf, k=5):
+def get_nearest_bus_robust(point, bus_gdf, tree, k=5):
     """
-    Find the nearest bus (Point or Polygon) to start_point.
-    Returns bus row and exact distance to geometry.
+    Find nearest bus using KDTree (for candidate selection)
+    + exact geometry distance (final refinement).
     """
-
     if bus_gdf.empty:
         return None, np.inf
 
-    # 1. KDTree über Centroids (für schnelle Vorauswahl)
-    coords = np.array(
-        [[geom.centroid.x, geom.centroid.y] for geom in bus_gdf.geometry]
-    )
-    tree = cKDTree(coords)
-
-    # k nächste Kandidaten
+    # k nächste Kandidaten über Tree
     _, idxs = tree.query([point.x, point.y], k=min(k, len(bus_gdf)))
 
-    # 2. exakte Distanz zur Geometrie berechnen
-    candidates = bus_gdf.iloc[idxs].copy()
-    candidates["dist_to_point"] = candidates.geometry.apply(
-        lambda g: point.distance(g)
-    )
+    # exakte Distanz zur Geometrie
+    candidates = bus_gdf.iloc[idxs]
+    dists = candidates.geometry.apply(lambda g: point.distance(g))
 
-    # 3. nächsten Bus auswählen
-    min_idx = candidates["dist_to_point"].idxmin()
-    nearest_bus = candidates.loc[min_idx, "bus_id"]
-    nearest_distance = candidates.loc[min_idx, "dist_to_point"]
+    best = dists.idxmin()
+    nearest_bus_id = bus_gdf.loc[best, "bus_id"]
+    nearest_dist = dists[best]
 
-    return nearest_bus, nearest_distance
+    return nearest_bus_id, nearest_dist
 
 
 def get_nearest_bus(point, bus_tree, buses_df):
     """
-    Returns closest bus to given start-/end-point of a line
+    Fast nearest bus by KDTree centroid distance.
     """
     dist, idx = bus_tree.query([point.x, point.y])
-    return buses_df.loc[idx, "bus_id"], dist
+    return buses_df.iloc[idx]["bus_id"], dist
 
 
 ###creating pypsa grid
@@ -622,8 +613,6 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     None.
 
     """
-
-    # import buses
     buses["centroid"] = buses.geometry.centroid
     for _, row in buses.iterrows():
         n.add("Bus", row["bus_id"], x=row.centroid.x, y=row.centroid.y)
@@ -633,42 +622,47 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
         n.buses.at[row["bus_id"], "trafo_cap"] = row["s_nom"]
         n.buses.at[row["bus_id"], "geom"] = row["geometry"]
 
-    # import LV lines
-    for idx, row in lines.iterrows():
+    # prepare KDTree
+    bus_coords = np.array(
+        [[geom.centroid.x, geom.centroid.y] for geom in buses.geometry]
+    )
+    bus_tree = cKDTree(bus_coords)
+
+    # trafo / distributor set + KDTree
+    traf_buses = buses[buses.comp_type.isin(["distributor", "trafo"])]
+
+    traf_coords = np.array(
+        [[geom.centroid.x, geom.centroid.y] for geom in traf_buses.geometry]
+    )
+    traf_tree = cKDTree(traf_coords)
+
+    def process_line(row):
+        line_id = row["line_id"]
         line_geom = row.geometry
         start_point = Point(line_geom.coords[0])
         end_point = Point(line_geom.coords[-1])
 
-        # relevant_buses = buses[buses.comp_type.isin(['joint', 'distributor', 'trafo'])]
-        # relevant_buses = relevant_buses.reset_index(drop=True)
-        relevant_buses = buses
+        comp_type = row["comp_type"]
+        cable_type = row["KABELTYP"]
 
-        bus_coords = np.array(
-            [
-                [geom.centroid.x, geom.centroid.y]
-                for geom in relevant_buses.geometry
-            ]
-        )
-        bus_tree = cKDTree(bus_coords)
+        # nearest bus to line_start
+        bus0, dist0 = get_nearest_bus_robust(start_point, buses, tree=bus_tree)
 
-        # Starte mit allen relevanten Bussen
-        bus0, dist0 = get_nearest_bus_robust(start_point, buses)
-        bus1, dist1 = get_nearest_bus_robust(end_point, buses)
+        # nearest bus to line_end
+        bus1, dist1 = get_nearest_bus_robust(end_point, buses, tree=bus_tree)
 
-        # If nearest bus is not directly next to line end/start, search for close distributor/trafo
+        # ---- Starting point ----
         if 10 > dist0 > 0.1:
-            traf_dist_buses = buses[
-                buses.comp_type.isin(["distributor", "trafo"])
-            ].reset_index(drop=True)
             traf_bus, traf_dist = get_nearest_bus_robust(
-                start_point, traf_dist_buses
+                start_point, traf_buses, tree=traf_tree
             )
-            # just use if trafo/distributor is nearby
             if traf_dist < 10:
                 bus0, dist0 = traf_bus, traf_dist
             else:
-                if row["comp_type"] != "mv_line":
-                    bus0, dist0 = get_nearest_bus_robust(start_point, buses)
+                if comp_type != "mv_line":
+                    bus0, dist0 = get_nearest_bus_robust(
+                        start_point, buses, tree=bus_tree
+                    )
                     print(
                         f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
                     )
@@ -676,27 +670,26 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
                     print(
                         f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
                     )
-                    continue
+                    return None  # signal -> skip
+
         elif dist0 >= 10:
-            # If no nearby bus at all, skip that line
             print(
                 f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
             )
-            continue
+            return None  # skip
 
+        # ---- End point ----
         if 10 > dist1 > 0.1:
-            traf_dist_buses = buses[
-                buses.comp_type.isin(["distributor", "trafo"])
-            ].reset_index(drop=True)
             traf_bus, traf_dist = get_nearest_bus_robust(
-                end_point, traf_dist_buses
+                end_point, traf_buses, tree=traf_tree
             )
-            # just use if trafo/distributor is nearby
             if traf_dist < 10:
                 bus1, dist1 = traf_bus, traf_dist
             else:
-                if row["comp_type"] != "mv_line":
-                    bus1, dist1 = get_nearest_bus_robust(end_point, buses)
+                if comp_type != "mv_line":
+                    bus1, dist1 = get_nearest_bus_robust(
+                        end_point, buses, tree=bus_tree
+                    )
                     print(
                         f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
                     )
@@ -704,18 +697,22 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
                     print(
                         f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
                     )
-                    continue
+                    return None  # skip
+
         elif dist1 >= 10:
-            # If no nearby bus at all, skip that line
             print(
                 f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
             )
-            continue
+            return None  # skip
+
+        # ------------------------------------------------------------------
+        # Cable parameter
+        # ------------------------------------------------------------------
 
         length_km = line_geom.length / 1000
-        cable_type = row["KABELTYP"]
+
         if cable_type in cable_types:
-            r = cable_types[cable_type]["R"] * length_km  # Ohm
+            r = cable_types[cable_type]["R"] * length_km
             x = (
                 cable_types[cable_type]["L"]
                 / 1000
@@ -723,45 +720,77 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
                 * 2
                 * np.pi
                 * length_km
-            )  # 2pi*frequenz #Ohm
+            )
             s_nom = (
                 cable_types[cable_type]["U"]
                 * cable_types[cable_type]["I_max"]
                 * np.sqrt(3)
                 / 1e6
-            )  # MW
-
+            )
         else:
-
-            # ToDo: define reasonable default-values
             r = 0.3
             x = 0.05
             s_nom = 1
 
-        capital_costs = 100000  # was 100_000*length_km/s_nom before
+        capital_costs = 100000  # ToDo: adjust default values!!!
 
-        n.add(
-            "Line",
-            row["line_id"],
-            bus0=bus0,
-            bus1=bus1,
-            carrier="AC",
-            length=length_km,
-            r=r,
-            x=x,
-            s_nom=s_nom,
-            s_nom_min=s_nom,
-            capital_cost=capital_costs,
-            s_nom_extendable=True,
-        )
-        n.lines.at[row["line_id"], "comp_type"] = row["comp_type"]
-        n.lines.at[row["line_id"], "geom"] = row["geometry"]
-        n.lines.at[row["line_id"], "cable_type"] = row["KABELTYP"]
+        # results
+        return {
+            "line_id": line_id,
+            "bus0": bus0,
+            "bus1": bus1,
+            "r": r,
+            "x": x,
+            "s_nom": s_nom,
+            "s_nom_extendable": True,
+            "capital_cost": capital_costs,
+            "length": length_km,
+            "comp_type": comp_type,
+            "cable_type": cable_type,
+            "geom": line_geom,
+        }
 
-        ##for validating
-        lines.at[idx, "bus_0"] = bus0
-        lines.at[idx, "bus_1"] = bus1
-        lines.at[idx, "line_id"] = row["line_id"]
+    ### parallelize line processing for faster model building
+    results = Parallel(n_jobs=-1, prefer="threads")(
+        delayed(process_line)(row) for idx, row in lines.iterrows()
+    )
+
+    results_filtered = [res for res in results if res is not None]
+    # list of parameters
+    line_ids = [res["line_id"] for res in results_filtered]
+    bus0_list = [res["bus0"] for res in results_filtered]
+    bus1_list = [res["bus1"] for res in results_filtered]
+    r_list = [res["r"] for res in results_filtered]
+    x_list = [res["x"] for res in results_filtered]
+    s_nom_list = [res["s_nom"] for res in results_filtered]
+    s_nom_extendable_list = [
+        res.get("s_nom_extendable", True) for res in results_filtered
+    ]
+    capital_cost_list = [res["capital_cost"] for res in results_filtered]
+    length_list = [res["length"] for res in results_filtered]
+    comp_type_list = [res["comp_type"] for res in results_filtered]
+    cable_type_list = [res["cable_type"] for res in results_filtered]
+    geom_list = [res["geom"] for res in results_filtered]
+
+    n.add(
+        "Line",
+        line_ids,
+        bus0=bus0_list,
+        bus1=bus1_list,
+        carrier="AC",
+        r=r_list,
+        x=x_list,
+        s_nom=s_nom_list,
+        s_nom_min=s_nom_list,
+        s_nom_extendable=s_nom_extendable_list,
+        capital_cost=capital_cost_list,
+        length=length_list,
+    )
+
+    # additional attributes (useful for distinguish components / create ding0 shape )
+    n.lines["comp_type"] = comp_type_list
+    n.lines["cable_type"] = cable_type_list
+    n.lines["geom"] = geom_list
 
     # add generator at trafo
     trafo_buses = n.buses[n.buses.comp_type == "trafo"]
