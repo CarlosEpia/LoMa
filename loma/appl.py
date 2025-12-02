@@ -27,7 +27,7 @@ from loma.MGB_Model_into_ding0_shape import prepare_ding0_shape_export
 from loma.plot_results import plot_results
 
 args = {
-    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V2",  # define path of shapefiles for grid infrastructure (related to execution folder)
+    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid",  # define path of shapefiles for grid infrastructure (related to execution folder)
     "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
     "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
     "path_to_household_data": "data/Input_files/all_streets_household_count.csv",
@@ -94,8 +94,8 @@ n = distribute_household_demand(n, household_dist_df)
 n = add_heat_loads_to_network(n)
 
 # insert EV_loads
-n = import_EV_loads(n, args["path_to_shapefiles_grid"])
-n = import_EV_demands(n)
+#n = import_EV_loads(n, args["path_to_shapefiles_grid"])
+#n = import_EV_demands(n)
 
 # insert heat pump flexibilities
 n = insert_heat_pump_flexibilities_14a(n)
@@ -105,7 +105,7 @@ snapshots = 24
 n.optimize(
     snapshots=n.snapshots[12:17],
     solver_name="highs",
-    extra_functionality=load_reduction_constraint_14a,
+    #extra_functionality=load_reduction_constraint_14a,
 )
 
 plot_results(n)
