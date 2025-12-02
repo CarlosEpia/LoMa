@@ -94,7 +94,7 @@ def check_heat_pumps(buses, input_path):
         bus_gdf["hp_capacity"] = 0.0
         bus_gdf["HP"]= 0
         
-        max_dist = 25
+        max_dist = 75
         assigned_hp={} 
         
         for hp_idx, hp in fallback_hp.iterrows():
