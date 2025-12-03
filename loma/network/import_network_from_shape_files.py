@@ -613,6 +613,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     None.
 
     """
+    #### ------- add buses to network -------##
     buses["centroid"] = buses.geometry.centroid
     for _, row in buses.iterrows():
         n.add("Bus", row["bus_id"], x=row.centroid.x, y=row.centroid.y)
@@ -622,6 +623,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
         n.buses.at[row["bus_id"], "trafo_cap"] = row["s_nom"]
         n.buses.at[row["bus_id"], "geom"] = row["geometry"]
 
+    #### ------- add lines to network ------###
     # prepare KDTree
     bus_coords = np.array(
         [[geom.centroid.x, geom.centroid.y] for geom in buses.geometry]
@@ -792,7 +794,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     n.lines["cable_type"] = cable_type_list
     n.lines["geom"] = geom_list
 
-    # add generator at trafo
+    ### ---- add transformator to network (connect an generator at each trafo for test reasons -----###
     trafo_buses = n.buses[n.buses.comp_type == "trafo"]
     n.buses = n.buses.drop(
         "trafo_cap", axis="columns"
@@ -825,7 +827,6 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
             s_nom_extendable=True,
         )
 
-        # 3. Generator am MS-Bus anschließen
         n.add(
             "Generator",
             name=f"gen_{idx}",

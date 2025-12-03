@@ -28,6 +28,7 @@ dependencies = [
   "highspy",
   "rapidfuzz",
   "networkx",
-  "cartopy"
+  "cartopy",
+  "joblib"
 ]
 dynamic = []
