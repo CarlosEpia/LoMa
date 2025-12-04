@@ -619,7 +619,6 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
         n.add("Bus", row["bus_id"], x=row.centroid.x, y=row.centroid.y)
         n.buses.at[row["bus_id"], "comp_type"] = row["comp_type"]
         n.buses.at[row["bus_id"], "household_count"] = row["household_count"]
-        n.buses.at[row["bus_id"], "HP"] = row["HP"]
         n.buses.at[row["bus_id"], "trafo_cap"] = row["s_nom"]
         n.buses.at[row["bus_id"], "geom"] = row["geometry"]
 
@@ -809,7 +808,6 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
             name=ms_bus,
             v_nom=20,
             carrier="AC",
-            HP=bus.HP,
             household_count=bus.household_count,
             x=bus.x,
             y=bus.y,
@@ -987,7 +985,7 @@ def create_pypsa_network(
         buses = count_households_per_bus_census_data(buses, census_data)
     else:
         buses = count_households_per_bus_input_file(buses, q_households_folder)
-    buses = check_heat_pumps(buses, heat_pump_folder)
+    # buses = check_heat_pumps(buses, heat_pump_folder)
     lines = merge_connected_mv_lines(lines)
 
     # final_load_buses = map_load_bus_to_network_bus(buses, lines)
