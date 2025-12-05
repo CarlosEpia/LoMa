@@ -21,7 +21,6 @@ def check_heat_pumps(n):
     1. If 'heat_pumps.csv' exists, use it.
     2. Otherwise, use 'hp_2035.shp' fallback.
     """
-
     con_buses = n.buses[n.buses.comp_type == "house_connection"].copy()
     con_buses["HP"] = 0  # Initialize HP column
     con_buses["hp_capacity"] = 0.0
@@ -49,32 +48,20 @@ def check_heat_pumps(n):
     else:
         bus_gdf["_bus_id_map"] = bus_gdf.index.astype(str)
 
-    # Initialize columns on bus_gdf
-    bus_gdf["HP"] = 0
-
     max_dist = 25
 
-    for hp_idx, hp in fallback_hp.iterrows():
-        hp_geom = hp.geometry
+    closest = gpd.sjoin_nearest(
+        fallback_hp,
+        bus_gdf,
+        how="left",
+        distance_col="distance",
+    )
 
-        # Distance from THIS HP to ALL buses
-        bus_gdf["__dist"] = bus_gdf.geometry.distance(hp_geom)
+    closest = closest[closest["distance"] < max_dist]
 
-        # Find nearest bus
-        nearest_idx = bus_gdf["__dist"].idxmin()
-        nearest_dist = bus_gdf.loc[nearest_idx, "__dist"]
-
-        # Only assign if within allowed distance
-        if nearest_dist <= max_dist:
-            bus_gdf.loc[nearest_idx, "HP"] = 1
-
-    # Cleanup
-    bus_gdf = bus_gdf.drop(columns=["__dist"], errors="ignore")
-
-    # Write results back
-    con_buses["HP"] = bus_gdf["HP"].values
-    hp_bus_ids = con_buses[con_buses.HP == 1].index.tolist()
-    n.buses["HP"] = n.buses.index.isin(hp_bus_ids).astype(int)
+    n.buses["HP"] = n.buses.apply(
+        lambda x: 1 if x.name in closest["_bus_id_map"].values else 0, axis=1
+    )
 
     return n
 
