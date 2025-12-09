@@ -9,6 +9,7 @@ def insert_pv_rooftop_and_battery(
 ):
     shape = gpd.read_file(shape_path).to_crs(32632)
     buses = network.buses.copy()
+    buses = buses[buses["comp_type"] == "house_connection"]
     buses = gpd.GeoDataFrame(buses, geometry="geom", crs=32632)
     network = insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path)
     network = insert_home_battery(network, shape, buses, batteries_path)
@@ -25,11 +26,11 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path):
 
     logging.warning(
         f"""
-                    {len(solar[solar["distance"] > 15])} pv_rooftop generators
+                    {len(solar[solar["distance"] > 50])} pv_rooftop generators
                     discarded because of distance to the closest bus
                     """
     )
-    solar = solar[solar["distance"] <= 15]
+    solar = solar[solar["distance"] <= 50]
     # insert data into network tables
     solar.rename(columns={"capacity": "p_nom"}, inplace=True)
     solar["Generator"] = solar.apply(lambda b: f"pv_roof_{b.name}_{b.bus}", axis=1)
@@ -71,11 +72,11 @@ def insert_home_battery(network, shape, buses, batteries_path):
 
     logging.warning(
         f"""
-                    {len(bat[bat["distance"] > 15])} home_batteries
+                    {len(bat[bat["distance"] > 50])} home_batteries
                     discarded because of distance to the closest bus
                     """
     )
-    bat = bat[bat["distance"] <= 15]
+    bat = bat[bat["distance"] <= 50]
 
     # insert data into network tables
     bat.rename(columns={"Bus": "bus"}, inplace=True)
