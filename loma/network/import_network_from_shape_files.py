@@ -24,8 +24,6 @@ from loma.demands.import_hp_demand import check_heat_pumps
 from loma.demands.household_count import count_households_per_bus_input_file
 from loma.demands.household_count import count_households_per_bus_census_data
 
-input_folder = "data/Input_files/shape_files_grid_V2"
-
 
 def create_gdf_from_shape(input_folder):
     """
@@ -613,6 +611,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     None.
 
     """
+
     #### ------- add buses to network -------##
     buses["centroid"] = buses.geometry.centroid
     for _, row in buses.iterrows():
@@ -793,6 +792,12 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
     n.lines["cable_type"] = cable_type_list
     n.lines["geom"] = geom_list
 
+    # store bus0 and bus1 for validation of the lines
+    results_df = pd.DataFrame(results_filtered)
+    lines = lines.merge(
+        results_df[["line_id", "bus0", "bus1"]], on="line_id", how="left"
+    )
+
     ### ---- add transformator to network (connect an generator at each trafo for test reasons -----###
     trafo_buses = n.buses[n.buses.comp_type == "trafo"]
     n.buses = n.buses.drop(
@@ -855,6 +860,44 @@ def open_LV_circle(n, lv_line_idx):
         print(f"Leitung '{lv_line_idx}' wurde entfernt.")
     else:
         print(f"Leitung '{lv_line_idx}' nicht gefunden im Netzwerk.")
+
+    return n
+
+
+def implement_switches_LV(n, input_path):
+    try:
+        lines_with_switches = gpd.read_file(input_path)
+    except Exception as e:
+        print(f"Not possible to read switches Input file {input_path}: {e}")
+        return n
+
+    open_lines_geoms = lines_with_switches["geometry"].tolist()
+
+    if not open_lines_geoms:
+        print(
+            "Keine offenen (zu löschenden) Leitungsgeometrien in der Shapefile gefunden. Netzwerk bleibt unverändert."
+        )
+        return n
+    import pdb
+
+    pdb.set_trace()
+    mask = n.lines.geom.apply(
+        lambda g: any(g.equals(o) for o in open_lines_geoms)
+    )
+    # deleted_lines = n.lines[mask]
+    # print(f"This lines are deleted:{deleted_lines.index.tolist()}")
+
+    initial_line_count = len(n.lines)
+    n.lines = n.lines[~n.lines.geom.isin(open_lines_geoms)]
+
+    lines_deleted = initial_line_count - len(n.lines)
+
+    print(
+        f"Switches implemented. {lines_deleted} lines were deleted due to open switches."
+    )
+    print(f"Remaining lines: {len(n.lines)}.")
+
+    n = fix_grid_infrastructure(n)
 
     return n
 
@@ -951,10 +994,12 @@ def fix_grid_infrastructure(n, min_size=10):
                     n.remove(comp_name, to_remove)
         else:
             print(
-                f"⚠️ Main Subnetwork with {len(comp)} Buses found – will be maintained."
+                f"⚠️ Main Subnetwork with {len(comp)} Buses found – will be maintained. Example buses:{sorted(list(comp))[:5]}"
             )
 
-    print("✅ Infrastructure of network is fixed.")
+    print("Infrastructure of network is fixed.")
+
+    return n
 
 
 def import_ev_chargers(n):
@@ -970,6 +1015,7 @@ def create_pypsa_network(
     cable_types,
     household_count,
     export_shape_files,
+    switches_folder,
     census_data,
 ):
     n = pypsa.Network()
@@ -981,7 +1027,7 @@ def create_pypsa_network(
     buses = snap_joint_buses_to_lines(lines, buses)
     if (
         household_count
-    ):  # check if household_data taken from cencus or own input_file
+    ):  # check if household_datgit dtta taken from cencus or own input_file
         buses = count_households_per_bus_census_data(buses, census_data)
     else:
         buses = count_households_per_bus_input_file(buses, q_households_folder)
@@ -1001,13 +1047,16 @@ def create_pypsa_network(
         buses = buses.drop(columns=["geometry"])
         buses.to_file("results/grid_buses.shp")
         lines.to_file("results/grid_lines.shp")
+    n = implement_switches_LV(n, switches_folder)
     fix_grid_infrastructure(n)
 
     #####
     # Just for the test case in Margarethe Böhme Straße
     #####
     ###implement switches for Margarethe Böhme Model
-    if "V2" not in str(shape_files_folder):
+    if "V2" not in str(shape_files_folder) and "V3" not in str(
+        shape_files_folder
+    ):
         n = open_LV_circle(n, "line_163")
         n = open_LV_circle(n, "line_84")
         n = open_LV_circle(n, "line_214")
