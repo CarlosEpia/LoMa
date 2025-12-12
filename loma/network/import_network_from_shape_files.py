@@ -880,9 +880,7 @@ def implement_switches_LV(n, input_path):
             "Keine offenen (zu löschenden) Leitungsgeometrien in der Shapefile gefunden. Netzwerk bleibt unverändert."
         )
         return n
-    import pdb
 
-    pdb.set_trace()
     mask = n.lines.geom.apply(
         lambda g: any(g.equals(o) for o in open_lines_geoms)
     )
@@ -970,9 +968,6 @@ def fix_grid_infrastructure(n, min_size=10):
                 else:
                     buses_used = df.loc[to_remove, "bus"].unique().tolist()
 
-                import pdb
-
-                pdb.set_trace()
                 print(
                     f"⚠️ Remove {len(to_remove)} {comp}(s) at unconnected buses: {buses_used}"
                 )
