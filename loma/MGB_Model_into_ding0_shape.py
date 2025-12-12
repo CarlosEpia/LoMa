@@ -114,7 +114,7 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     buses["x"], buses["y"] = transformer.transform(
         buses["x"].values, buses["y"].values
     )
-    buses["mv_grid_id"] = 0  # mv_grid_id
+    buses["mv_grid_id"] = 35725  # mv_grid_id from ding0 Husum grid
     buses["lv_grid_id"] = buses["name"].apply(
         lambda x: np.nan if "MS" in x else (np.nan if "MV" in x else 1)
     )  # toDo: check how to define this value the right way
