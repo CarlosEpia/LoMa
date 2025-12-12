@@ -752,7 +752,9 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
 
     ### parallelize line processing for faster model building
     results = Parallel(n_jobs=-1, prefer="threads")(
-        delayed(process_line)(row) for idx, row in lines.iterrows()
+        delayed(process_line)(row)
+        for idx, row in lines.iterrows()
+        # if row["line_id"] == "line_30887"
     )
 
     results_filtered = [res for res in results if res is not None]
@@ -906,9 +908,9 @@ def fix_grid_infrastructure(n, min_size=10):
     # Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
     if not loop_lines.empty:
-        print(
-            f"⚠️ Loop lines (bus0==bus1) found:\n{loop_lines[['bus0', 'bus1']]}"
-        )
+        print("⚠️ Loop line IDs found:")
+        for idx in loop_lines.index:
+            print(idx)
         print("⚠️ This lines will be deleted.")
         n.remove("Line", loop_lines.index.tolist())
 
@@ -942,22 +944,39 @@ def fix_grid_infrastructure(n, min_size=10):
             "Link",
         ]:
             df = n.df(comp)
-            if comp == "Transformer":
-                to_remove = df[
-                    df.bus0.isin(uncon_buses.index)
-                    | df.bus1.isin(uncon_buses.index)
-                ].index.tolist()
-            elif comp == "Link":
-                to_remove = df[
-                    df.bus0.isin(uncon_buses.index)
-                    | df.bus1.isin(uncon_buses.index)
-                ].index.tolist()
-            else:
-                to_remove = df[df.bus.isin(uncon_buses.index)].index.tolist()
-            if to_remove:
-                print(
-                    f"⚠️ Remove {len(to_remove)} {comp}(s) at unconnected buses"
+
+            if comp in ["Transformer", "Link"]:
+                mask = df.bus0.isin(uncon_buses.index) | df.bus1.isin(
+                    uncon_buses.index
                 )
+            else:
+                mask = df.bus.isin(uncon_buses.index)
+
+            to_remove = df[mask].index.tolist()
+
+            if to_remove:
+                # Finde die betroffenen Busse
+                if comp in ["Transformer", "Link"]:
+                    buses_used = (
+                        pd.concat(
+                            [
+                                df.loc[to_remove, "bus0"],
+                                df.loc[to_remove, "bus1"],
+                            ]
+                        )
+                        .unique()
+                        .tolist()
+                    )
+                else:
+                    buses_used = df.loc[to_remove, "bus"].unique().tolist()
+
+                import pdb
+
+                pdb.set_trace()
+                print(
+                    f"⚠️ Remove {len(to_remove)} {comp}(s) at unconnected buses: {buses_used}"
+                )
+
                 n.remove(comp, to_remove)
 
     # Erkenne Subnetzwerke
