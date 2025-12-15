@@ -294,6 +294,7 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
                     "Endmuffe",
                     "Übergangsmuffe",
                     "Reparaturmuffe",
+                    "Abzweigmuffe",
                     "vorverlegtes Ende",
                     "HA-Kombimuffe",
                     "distributor",
