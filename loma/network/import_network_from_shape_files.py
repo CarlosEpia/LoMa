@@ -62,13 +62,24 @@ def create_gdf_from_shape(input_folder):
     distributors = safe_read(
         os.path.join(input_folder, "Gis ST Kabelverteiler Position.shp")
     )
-    joints = safe_read(
+    joints_LV = safe_read(
         os.path.join(input_folder, "Gis NSP Muffe Position.shp")
     )
+    joints_MV = safe_read(
+        os.path.join(input_folder, "Gis MSP Muffe Position.shp")
+    )
+    joints_MV = joints_MV.to_crs(joints_LV.crs) ##necessary for concat joints
+    joints_MV['comp_type']= 'MV_Muffe'  # to distinguish MV Muffen from LV_Muffen for line splitting method
+    joints = pd.concat([joints_LV, joints_MV], ignore_index=True)
+    
     MVLV_trafos = safe_read(
         os.path.join(input_folder, "Gis ST Station Fläche.shp")
     )
 
+    #delete lines which are "out of service"
+    LV_lines = LV_lines[~(LV_lines.STATUS =='außer Betrieb')]
+    MV_lines = MV_lines[~(MV_lines.STATUS.isin(['außer Betrieb', 'stillgelegt']))]
+    
     # rename columns to generalize the names
     for df in [HA_Bus, distributors, joints]:
         df.rename(
@@ -90,9 +101,8 @@ def create_gdf_from_shape(input_folder):
     if not MV_lines.empty:
         MV_lines["comp_type"] = "mv_line"
     HA_lines["comp_type"] = "hc_line"
-    joints["comp_type"] = (
-        joints.ART
-    )  ##ToDo: Generalize for usage in other regions than husum
+    mask = joints["comp_type"].isna()
+    joints.loc[mask, "comp_type"] = joints.loc[mask, "ART"]  ##ToDo: Generalize for usage in other regions than husum
     distributors["comp_type"] = "distributor"
     MVLV_trafos["comp_type"] = "trafo"
     HA_Bus["comp_type"] = "house_connection"
@@ -135,9 +145,6 @@ def create_gdf_from_shape(input_folder):
     buses = buses.reset_index(drop=True)
 
     ##lines
-    MV_lines["KABELTYP"] = (
-        None  ###Delete when KABElTYP is part of shape file attributes
-    )
     line_columns = ["comp_type", "KABELTYP", "geometry"]
     # combine all line-dataframes
     lines_list = [df for df in [LV_lines, MV_lines, HA_lines] if not df.empty]
@@ -271,14 +278,16 @@ def cut_line_between_distances(
 
 def split_lines_on_joints(lines, buses, tolerance=0.1):
     """
-    Splits LV- and HC-lines at joint buses (snapped to the line) and returns a new GeoDataFrame
-    with all lines (LV, HC, MV), where only LV and HC lines are split.
+    Splits LV-, HC-lines at joint buses (snapped to the line) and returns a new GeoDataFrame
+    with all lines (LV, HC, MV).
     """
 
-    lines_to_split = lines[lines.comp_type.isin(["lv_line", "hc_line"])].copy()
+    lines_to_split = lines[
+        lines.comp_type.isin(["lv_line", "hc_line"])
+    ].copy()
     other_lines = lines[
         ~lines.comp_type.isin(["lv_line", "hc_line"])
-    ].copy()  # z.B. mv_line
+    ].copy()
 
     split_lines = []
 
@@ -375,8 +384,13 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
             ]
         )
     ].copy()
+        
 
-    lines = lines[lines.comp_type.isin(["lv_line", "hc_line"])]
+    buses_points = buses[buses.geometry.geom_type == "Point"]
+    buses_points.to_file(
+          "/home/student/Execution/LoMa_exe/results/grid_buses_vorher.shp"
+      )
+    lines = lines[lines.comp_type.isin(["lv_line", "hc_line", "mv_line"])]
     line_geometries = list(lines.geometry)
     str_tree = STRtree(line_geometries)
 
@@ -594,7 +608,7 @@ def get_nearest_bus(point, bus_tree, buses_df):
 
 
 ###creating pypsa grid
-def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
+def import_grid_infrastructure(n, buses, lines, cable_types):
     """
     Based on exported shapefiles recreate the grid infrastructure as pysa_network
 
@@ -669,7 +683,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
                     )
                 else:
                     print(
-                        f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
+                        f"MV_Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
                     )
                     return None  # signal -> skip
 
@@ -696,7 +710,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, household_count):
                     )
                 else:
                     print(
-                        f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
+                        f"MV_Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
                     )
                     return None  # skip
 
@@ -1047,7 +1061,7 @@ def create_pypsa_network(
     else:
         buses = count_households_per_bus_input_file(buses, q_households_folder)
     # buses = check_heat_pumps(buses, heat_pump_folder)
-    lines = merge_connected_mv_lines(lines)
+    #lines = merge_connected_mv_lines(lines)
 
     # final_load_buses = map_load_bus_to_network_bus(buses, lines)
     # network_buses = buses[buses.comp_type.isin(['trafo', 'distributor'])]
@@ -1055,7 +1069,7 @@ def create_pypsa_network(
     split_lines = split_lines_on_joints(lines, buses)
     # merged_lines = merge_unconnected_lines(split_lines, buses)
     buses, lines = import_grid_infrastructure(
-        n, buses, split_lines, cable_types, household_count
+        n, buses, split_lines, cable_types
     )
     if export_shape_files:
         os.makedirs("results", exist_ok=True)
