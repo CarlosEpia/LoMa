@@ -68,8 +68,11 @@ def create_gdf_from_shape(input_folder):
     joints_MV = safe_read(
         os.path.join(input_folder, "Gis MSP Muffe Position.shp")
     )
-    joints_MV = joints_MV.to_crs(joints_LV.crs) ##necessary for concat joints
-    joints_MV['comp_type']= 'MV_Muffe'  # to distinguish MV Muffen from LV_Muffen for line splitting method
+    if not joints_MV.empty:
+          joints_MV = joints_MV.to_crs(joints_LV.crs) ##necessary for concat joints
+          joints_MV['comp_type']= 'MV_Muffe'  # to distinguish MV Muffen from LV_Muffen for line splitting method
+    else: 
+          joints_LV['comp_type'] = None
     joints = pd.concat([joints_LV, joints_MV], ignore_index=True)
     
     MVLV_trafos = safe_read(
@@ -78,7 +81,8 @@ def create_gdf_from_shape(input_folder):
 
     #delete lines which are "out of service"
     LV_lines = LV_lines[~(LV_lines.STATUS.isin(['außer Betrieb', 'in Bau', 'Vorverlegung']))]
-    MV_lines = MV_lines[~(MV_lines.STATUS.isin(['außer Betrieb', 'stillgelegt', 'in Bau', 'Vorverlegung']))]
+    if not MV_lines.empty: 
+          MV_lines = MV_lines[~(MV_lines.STATUS.isin(['außer Betrieb', 'stillgelegt', 'in Bau', 'Vorverlegung']))]
     
     # rename columns to generalize the names
     for df in [HA_Bus, distributors, joints]:
@@ -864,6 +868,9 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         "14a",
         "home_battery",
         "solar_rooftop",
+        "heat_pump",
+        "charging_point",
+        "conventional_load"      
     ]
     for c in carriers:
         n.add("Carrier", c)
