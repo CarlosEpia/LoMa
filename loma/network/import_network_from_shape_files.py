@@ -77,8 +77,8 @@ def create_gdf_from_shape(input_folder):
     )
 
     #delete lines which are "out of service"
-    LV_lines = LV_lines[~(LV_lines.STATUS =='außer Betrieb')]
-    MV_lines = MV_lines[~(MV_lines.STATUS.isin(['außer Betrieb', 'stillgelegt']))]
+    LV_lines = LV_lines[~(LV_lines.STATUS.isin(['außer Betrieb', 'in Bau', 'Vorverlegung']))]
+    MV_lines = MV_lines[~(MV_lines.STATUS.isin(['außer Betrieb', 'stillgelegt', 'in Bau', 'Vorverlegung']))]
     
     # rename columns to generalize the names
     for df in [HA_Bus, distributors, joints]:
