@@ -66,7 +66,7 @@ def import_EV_loads(n, input_folder):
             load_name,
             bus=bus_name,
             p_set=p_set,
-            carrier="land_transport_EV",
+            carrier="charging_point",
         )
 
     return n
@@ -89,7 +89,7 @@ def import_EV_demands(
     Optional: Saves ev_profles_df as CSV in results folder.
     """
 
-    ev_loads = n.loads[n.loads["carrier"] == "land_transport_EV"]
+    ev_loads = n.loads[n.loads["carrier"] == "charging_point"]
 
     # Creates dummy EV loads and connection parameter
     def ev_profile_stochastic_with_connection(

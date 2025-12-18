@@ -200,7 +200,10 @@ def add_heat_loads_to_network(n):
         ).set_index("MESS_DATUM")
         cop_air = calculate_cop_air(temp_air["TT_TU"])
         elec_profile = hourly_profile / cop_air
-
+        
+        #cop_timeseries export for edisgo usage
+        cop_air.to_csv("./results/MGB_model/timeseries/cop_timeseries.csv")
+        
         if (
             elec_profile.max() < 0.0005
         ):  # ToDo: Discuss if adjustemnt of value is necessary
@@ -215,7 +218,7 @@ def add_heat_loads_to_network(n):
             "Load",
             name=f"heat_load_{bus_id}",
             bus=bus_id,
-            carrier="AC",
+            carrier="heat_pump",
             p_set=load_profiles[bus_idx],
         )
 

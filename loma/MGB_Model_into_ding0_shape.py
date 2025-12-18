@@ -168,7 +168,7 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     loads["bus"] = n.loads.bus
     loads["p_set"] = n.loads_t.p_set.max()
     loads["building_id"] = None
-    loads["type"] = "conventional_load"
+    loads["type"] = n.loads.carrier
     loads["annual_consumption"] = None
     loads["sector"] = loads[
         "name"

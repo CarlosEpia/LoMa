@@ -81,7 +81,7 @@ def distribute_household_demand(n, profile_dist, random_seed=42):
 
             # Define unique load name
             load_name = f'HH_Load_{bus_name}_{i}'
-            n.add("Load", load_name, bus=bus_name, carrier='AC', p_set=0)
+            n.add("Load", load_name, bus=bus_name, carrier='conventional_load', p_set=0)
 
             # Collect profile series for later batch insertion
             new_profiles[load_name] = profile_series_mwh
