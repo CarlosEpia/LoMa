@@ -36,7 +36,7 @@ def assign_cts_demand_to_buses(network, cts_demands):
     buses = network.buses.copy()
     buses = buses[buses["comp_type"] == "house_connection"]
     buses = gpd.GeoDataFrame(buses, geometry="geom", crs=32632)
-
+    
     cts_demands = gpd.GeoDataFrame(cts_demands, geometry="geom")
     cts_demands.to_crs(crs=32632, inplace=True)
     cts_demands = gpd.sjoin_nearest(
@@ -54,7 +54,8 @@ def assign_cts_demand_to_buses(network, cts_demands):
     # #####################################################
 
     # insert data into network tables
-    cts_demands.rename(columns={"Bus": "bus"}, inplace=True)
+    
+    cts_demands.rename(columns={"name": "bus"}, inplace=True)
     cts_demands["Load"] = cts_demands.apply(
         lambda b: f"CTS_Load_{b.name}_{b.bus}", axis=1
     )
