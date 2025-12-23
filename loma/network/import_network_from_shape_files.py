@@ -80,9 +80,13 @@ def create_gdf_from_shape(input_folder):
     )
 
     #delete lines which are "out of service"
-    LV_lines = LV_lines[~(LV_lines.STATUS.isin(['außer Betrieb', 'in Bau', 'Vorverlegung']))]
+    LV_lines = LV_lines[~(LV_lines.STATUS.isin(['außer Betrieb', 'Vorverlegung', 'stillgelegt']))]
+    HA_lines = HA_lines[~(HA_lines.STATUS.isin(['außer Betrieb', 'Vorverlegung', 'stillgelegt']))]
     if not MV_lines.empty: 
-          MV_lines = MV_lines[~(MV_lines.STATUS.isin(['außer Betrieb', 'stillgelegt', 'in Bau', 'Vorverlegung']))]
+          MV_lines = MV_lines[~(MV_lines.STATUS.isin(['außer Betrieb', 'stillgelegt', 'Vorverlegung']))]
+    
+    #delete ditributors with type 'Beleuchtung' (leads to wrong connnection in some cases)
+    distributors = distributors[distributors.STATUS!='Beleuchtung']
     
     # rename columns to generalize the names
     for df in [HA_Bus, distributors, joints]:
@@ -108,7 +112,8 @@ def create_gdf_from_shape(input_folder):
     mask = joints["comp_type"].isna()
     joints.loc[mask, "comp_type"] = joints.loc[mask, "ART"]  ##ToDo: Generalize for usage in other regions than husum
     distributors["comp_type"] = "distributor"
-    MVLV_trafos["comp_type"] = "trafo"
+    MVLV_trafos["comp_type"] = MVLV_trafos["ART"].apply(
+          lambda x: "trafo_HV" if x == "Umspannwerk" else "trafo") #distuingish MV/HV_trafo
     HA_Bus["comp_type"] = "house_connection"
 
     ##buses
@@ -581,6 +586,7 @@ def map_load_bus_to_network_bus(buses, lines):
     return filtered_buses
 
 
+
 def get_nearest_bus_robust(point, bus_gdf, tree, k=5):
     """
     Find nearest bus using KDTree (for candidate selection)
@@ -770,10 +776,10 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         }
 
     ### parallelize line processing for faster model building
+    '''
     results = Parallel(n_jobs=-1, prefer="threads")(
         delayed(process_line)(row)
         for idx, row in lines.iterrows()
-        # if row["line_id"] == "line_30887"
     )
 
     results_filtered = [res for res in results if res is not None]
@@ -807,7 +813,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         capital_cost=capital_cost_list,
         length=length_list,
     )
-
+    
     # additional attributes (useful for distinguish components / create ding0 shape )
     n.lines["comp_type"] = comp_type_list
     n.lines["cable_type"] = cable_type_list
@@ -818,39 +824,60 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
     lines = lines.merge(
         results_df[["line_id", "bus0", "bus1"]], on="line_id", how="left"
     )
-
+    '''
     ### ---- add transformator to network (connect an generator at each trafo for test reasons -----###
-    trafo_buses = n.buses[n.buses.comp_type == "trafo"]
+    trafo_buses = n.buses[n.buses.comp_type.str.contains("trafo")]
+    import pdb;pdb.set_trace()
     n.buses = n.buses.drop(
         "trafo_cap", axis="columns"
     )  # trafo_cap column isn't used anymore
     for idx, bus in trafo_buses.iterrows():
-        lv_bus = bus.name
-        ms_bus = f"{lv_bus}_MS"  # dummy bus for now
-        s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
+        comp = bus.comp_type
+        if bus.comp_type =='trafo':
+              bus1 = bus.name
+              bus0 = f"{bus1}_MV"  # Same bus for MV level
+              s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
+        else: 
+              bus1 = f"{bus.name}_MV"
+              bus0 = f"{bus.name}_HV"  # Same bus for MV level
+              s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 63
+              ### to add both MV- and HV-bus to network
+              n.add(
+                  "Bus",
+                  name=bus1,
+                  v_nom=110,
+                  carrier="AC",
+                  household_count=bus.household_count,
+                  x=bus.x,
+                  y=bus.y,
+                  geom=bus.geom,
+                  comp_type=comp,
+              )
 
         n.add(
             "Bus",
-            name=ms_bus,
+            name=bus0,
             v_nom=20,
             carrier="AC",
             household_count=bus.household_count,
             x=bus.x,
             y=bus.y,
             geom=bus.geom,
+            comp_type=comp,
         )
 
         n.add(
             "Transformer",
-            name=f"trafo_{lv_bus}",
-            bus0=ms_bus,
-            bus1=lv_bus,
+            name=f"trafo_{bus1}",
+            bus0=bus0,
+            bus1=bus1,
             x=0.03864647477581,  # example vlaues from dingo
             r=0.0103174603174603,
             s_nom=s_nom,
             s_nom_extendable=True,
+            comp_type = comp
         )
-
+        '''
         n.add(
             "Generator",
             name=f"gen_{idx}",
@@ -859,6 +886,31 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
             p_nom=1e6,
             marginal_cost=100,
         )
+        '''
+        
+    #connect MV_lines to correct side of trafo
+    # --- build LV -> MS bus mapping ---
+    mv_buses = n.buses.index[n.buses.index.str.endswith("_MV")]
+      
+    lv_to_mv = {
+          mv_bus.replace("_MV", ""): mv_bus
+          for mv_bus in mv_buses
+    }
+      
+    # --- update MV lines ---
+    mv_lines = n.lines[n.lines.comp_type == "mv_line"]
+      
+    for line_name, line in mv_lines.iterrows():
+      
+        bus0 = line.bus0
+        bus1 = line.bus1
+             
+        new_bus0 = lv_to_mv.get(bus0, bus0)
+        new_bus1 = lv_to_mv.get(bus1, bus1)
+    
+        if new_bus0 != bus0 or new_bus1 != bus1:
+            n.lines.at[line_name, "bus0"] = new_bus0
+            n.lines.at[line_name, "bus1"] = new_bus1
 
     # add carriers
 
@@ -924,7 +976,7 @@ def implement_switches_LV(n, input_path):
     return n
 
 
-def fix_grid_infrastructure(n, min_size=10):
+def fix_grid_infrastructure(n, min_size=2500):
     # Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
     if not loop_lines.empty:
@@ -1054,49 +1106,58 @@ def create_pypsa_network(
     switches_folder,
     census_data,
 ):
+    print("=== [1/10] Initializing PyPSA network ===")
     n = pypsa.Network()
     n.to_crs(32632)
+
     time_index = pd.date_range("2023-01-01", periods=8760, freq="h")
     n.snapshots = time_index
+    print(f"    -> Snapshots set: {len(time_index)} hours")
 
+    print("=== [2/10] Reading grid shape files ===")
     buses, lines = create_gdf_from_shape(shape_files_folder)
+    print(f"    -> Loaded {len(buses)} buses, {len(lines)} lines")
+
+    print("=== [3/10] Snapping joint buses to lines ===")
     buses = snap_joint_buses_to_lines(lines, buses)
-    if (
-        household_count
-    ):  # check if household_datgit dtta taken from cencus or own input_file
+
+    print("=== [4/10] Counting households per bus ===")
+    if household_count:
+        print("    -> Using census data")
         buses = count_households_per_bus_census_data(buses, census_data)
     else:
+        print("    -> Using input household file")
         buses = count_households_per_bus_input_file(buses, q_households_folder)
-    # buses = check_heat_pumps(buses, heat_pump_folder)
-    #lines = merge_connected_mv_lines(lines)
 
-    # final_load_buses = map_load_bus_to_network_bus(buses, lines)
-    # network_buses = buses[buses.comp_type.isin(['trafo', 'distributor'])]
-    # all_network_buses = pd.concat([final_load_buses, network_buses])
+    print("=== [5/10] Splitting lines at joint buses ===")
     split_lines = split_lines_on_joints(lines, buses)
-    # merged_lines = merge_unconnected_lines(split_lines, buses)
+    print(f"    -> Lines after splitting: {len(split_lines)}")
+
+    print("=== [6/10] Importing grid infrastructure into PyPSA ===")
     buses, lines = import_grid_infrastructure(
         n, buses, split_lines, cable_types
     )
+    print(
+        f"    -> PyPSA now contains "
+        f"{len(n.buses)} buses, "
+        f"{len(n.lines)} lines"
+    )
+
     if export_shape_files:
+        print("=== [7/10] Exporting grid shapefiles ===")
         os.makedirs("results", exist_ok=True)
         buses = buses.drop(columns=["geometry"])
         buses.to_file("results/grid_buses.shp")
         lines.to_file("results/grid_lines.shp")
+        print("    -> Shapefiles written to ./results")
+
+    print("=== [8/10] Implementing LV switches ===")
     n = implement_switches_LV(n, switches_folder)
+
+    print("=== [9/10] Fixing grid infrastructure ===")
     fix_grid_infrastructure(n)
 
-    #####
-    # Just for the test case in Margarethe Böhme Straße
-    #####
-    ###implement switches for Margarethe Böhme Model
-    if "V2" not in str(shape_files_folder) and "V3" not in str(
-        shape_files_folder
-    ):
-        n = open_LV_circle(n, "line_163")
-        n = open_LV_circle(n, "line_84")
-        n = open_LV_circle(n, "line_214")
-        n = open_LV_circle(n, "line_176")
-        n = open_LV_circle(n, "line_93")
+    print("=== Network creation finished successfully ===")
 
     return n
+
