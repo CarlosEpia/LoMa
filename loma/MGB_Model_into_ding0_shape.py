@@ -196,17 +196,15 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
         }
     )
 
-    ### transformers lv/mv
-    filtered_trafo_mv = n.transformers[
-        ~n.transformers.index.str.contains("dummy")
-    ]
-    transformers = pd.DataFrame(index=filtered_trafo_mv.index)
-    transformers["name"] = filtered_trafo_mv.index
-    transformers["bus0"] = filtered_trafo_mv.bus0
-    transformers["bus1"] = filtered_trafo_mv.bus1
-    transformers["x"] = filtered_trafo_mv.x
-    transformers["r"] = filtered_trafo_mv.r
-    transformers["s_nom"] = filtered_trafo_mv.s_nom
+    ### transformers lv/mv     ###todo anpassen der trafo definition und exkludieren des HVMV trafos dabei
+    trafos = n.transformers
+    transformers = pd.DataFrame(index=trafos.index)
+    transformers["name"] = trafos.index
+    transformers["bus0"] = trafos.bus0
+    transformers["bus1"] = trafos.bus1
+    transformers["x"] = trafos.x
+    transformers["r"] = trafos.r
+    transformers["s_nom"] = trafos.s_nom
     transformers["type"] = (transformers["s_nom"] * 1e3).astype(int).astype(
         str
     ) + " kVA"
@@ -216,25 +214,26 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
         str
     ) + " kVA"  ##ToDo: check if this format fits to edigo requirements
 
-    ##transformer mv/hv
-    filtered_trafo_hv = n.transformers[
-        n.transformers.index.str.contains("dummy")
+    ##transformer mv/hv 
+    
+    trafo_hv = n.transformers[
+        n.transformers.comp_type =='trafo_HV'
     ]
-    transformers_hv = pd.DataFrame(index=filtered_trafo_hv.index)
-    transformers_hv["name"] = transformers.index
-    transformers_hv["bus0"] = filtered_trafo_hv.bus0
-    transformers_hv["bus1"] = filtered_trafo_hv.bus1
-    transformers_hv["x"] = filtered_trafo_hv.x
-    transformers_hv["r"] = filtered_trafo_hv.r
-    transformers_hv["s_nom"] = filtered_trafo_hv.s_nom
-    transformers_hv["type"] = (transformers_hv["s_nom"] * 1e3).astype(
+    transformers_hv = pd.DataFrame(index=trafo_hv.index)
+    transformers_hv["name"] = trafo_hv.index
+    transformers_hv["bus0"] = trafo_hv.bus1
+    transformers_hv["bus1"] = trafo_hv.bus0
+    transformers_hv["x"] = np.nan
+    transformers_hv["r"] = np.nan
+    transformers_hv["s_nom"] = trafo_hv.s_nom
+    transformers_hv["type"] = transformers_hv["s_nom"].astype(
         int
     ).astype(
         str
-    ) + " kVA"  ##ToDo: check if this format fits to edigo requirements
-    transformers_hv["type_info"] = (transformers_hv["s_nom"] * 1e3).astype(
+    ) + " MVA"  ##ToDo: check if this format fits to edigo requirements
+    transformers_hv["type_info"] = transformers_hv["s_nom"].astype(
         int
-    ).astype(str) + " kVA"
+    ).astype(str) + " MVA"
 
     ### links (not part of ding0-Output so no template )
     links = pd.DataFrame(index=n.links.index)
@@ -290,6 +289,6 @@ def export_timeseries(n, export_path):
 
 
 def prepare_ding0_shape_export(n, export_path):
-    n = add_dummy_mv_grid(n)
+    #n = add_dummy_mv_grid(n)
     adjust_network_shape(n, export_path)
     export_timeseries(n, export_path)
