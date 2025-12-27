@@ -409,11 +409,6 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
         )
     ].copy()
         
-
-    buses_points = buses[buses.geometry.geom_type == "Point"]
-    buses_points.to_file(
-          "/home/student/Execution/LoMa_exe/results/grid_buses_vorher.shp"
-      )
     lines = lines[lines.comp_type.isin(["lv_line", "hc_line", "mv_line"])]
     line_geometries = list(lines.geometry)
     str_tree = STRtree(line_geometries)
