@@ -294,36 +294,50 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
     lines_to_split = lines[
         lines.comp_type.isin(["lv_line", "hc_line"])
     ].copy()
+
     other_lines = lines[
         ~lines.comp_type.isin(["lv_line", "hc_line"])
     ].copy()
 
+    joint_types = [
+        "Hausanschlußmuffe",
+        "Verbindungsmuffe",
+        "Endmuffe",
+        "Übergangsmuffe",
+        "Reparaturmuffe",
+        "Abzweigmuffe",
+        "vorverlegtes Ende",
+        "HA-Kombimuffe",
+        "distributor",
+    ]
+
+    joint_buses = buses[buses.comp_type.isin(joint_types)].copy()
+    joint_sindex = joint_buses.sindex
+
     split_lines = []
 
-    for idx, row in lines_to_split.iterrows():
+    for _, row in lines_to_split.iterrows():
         line_geom = row.geometry
 
-        # Filter relevant Muffen/Buses for splitting
-        joint_buses = buses[
-            buses.comp_type.isin(
-                [
-                    "Hausanschlußmuffe",
-                    "Verbindungsmuffe",
-                    "Endmuffe",
-                    "Übergangsmuffe",
-                    "Reparaturmuffe",
-                    "Abzweigmuffe",
-                    "vorverlegtes Ende",
-                    "HA-Kombimuffe",
-                    "distributor",
-                ]
-            )
-        ].copy()
+        # --- spatial pre-filter (bounding box) ---
+        bbox = line_geom.buffer(tolerance).bounds
+        candidate_idx = list(joint_sindex.intersection(bbox))
+        candidates = joint_buses.iloc[candidate_idx]
 
-        joint_buses["distance"] = joint_buses.geometry.apply(
-            lambda p: line_geom.distance(p)
-        )
-        near_joints = joint_buses[joint_buses["distance"] < tolerance]
+        if candidates.empty:
+            split_lines.append(
+                {
+                    "geometry": line_geom,
+                    "comp_type": row.comp_type,
+                    "KABELTYP": row.KABELTYP,
+                }
+            )
+            continue
+
+        # --- exact distance check ---
+        near_joints = candidates[
+            candidates.geometry.distance(line_geom) < tolerance
+        ]
 
         if near_joints.empty:
             split_lines.append(
@@ -334,10 +348,9 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
                 }
             )
         else:
-            snapped_points = list(near_joints.geometry)
             split_segments = cut_line_at_points(
-                line_geom, snapped_points
-            )  # Annahme: existierende Hilfsfunktion
+                line_geom, list(near_joints.geometry)
+            )
 
             for segment in split_segments:
                 split_lines.append(
@@ -348,15 +361,17 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
                     }
                 )
 
-    split_lines_df = pd.DataFrame(split_lines)
     split_lines_gdf = gpd.GeoDataFrame(
-        split_lines_df, geometry="geometry", crs=lines.crs
+        split_lines, geometry="geometry", crs=lines.crs
     )
-    final_gdf = pd.concat([split_lines_gdf, other_lines], ignore_index=True)
 
-    # new line_ids
-    final_gdf = final_gdf.reset_index(drop=True)
-    final_gdf["line_id"] = ["line_" + str(i) for i in range(len(final_gdf))]
+    final_gdf = pd.concat(
+        [split_lines_gdf, other_lines], ignore_index=True
+    )
+
+    final_gdf["line_id"] = [
+        f"line_{i}" for i in range(len(final_gdf))
+    ]
 
     return final_gdf
 
@@ -776,7 +791,6 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         }
 
     ### parallelize line processing for faster model building
-    '''
     results = Parallel(n_jobs=-1, prefer="threads")(
         delayed(process_line)(row)
         for idx, row in lines.iterrows()
@@ -824,10 +838,9 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
     lines = lines.merge(
         results_df[["line_id", "bus0", "bus1"]], on="line_id", how="left"
     )
-    '''
+
     ### ---- add transformator to network (connect an generator at each trafo for test reasons -----###
     trafo_buses = n.buses[n.buses.comp_type.str.contains("trafo")]
-    import pdb;pdb.set_trace()
     n.buses = n.buses.drop(
         "trafo_cap", axis="columns"
     )  # trafo_cap column isn't used anymore
@@ -853,6 +866,17 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
                   geom=bus.geom,
                   comp_type=comp,
               )
+              
+              n.add(
+                  "Generator",
+                  name=f"gen_{idx}",
+                  bus=bus1,
+                  carrier="AC",
+                  p_nom=1e9,
+                  marginal_cost=100,
+                  #p_nom_extendable =True,
+              )
+              
 
         n.add(
             "Bus",
@@ -877,16 +901,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
             s_nom_extendable=True,
             comp_type = comp
         )
-        '''
-        n.add(
-            "Generator",
-            name=f"gen_{idx}",
-            bus=ms_bus,
-            carrier="AC",
-            p_nom=1e6,
-            marginal_cost=100,
-        )
-        '''
+        
         
     #connect MV_lines to correct side of trafo
     # --- build LV -> MS bus mapping ---
