@@ -103,6 +103,16 @@ n = import_EV_demands(n)
 # insert heat pump flexibilities
 #n = insert_heat_pump_flexibilities_14a(n)
 
+
+##manual adjustements for solvable model
+n.transformers.capital_cost = 0.1
+n.generators.p_nom_extendable = True
+n.generators.capital_cost = 10
+
+from datetime import datetime
+
+print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
 # Optimize
 n.optimize(
     snapshots=n.snapshots[12:15],
@@ -110,7 +120,9 @@ n.optimize(
     # extra_functionality=load_reduction_constraint_14a,
 )
 
-plot_results(n)
+print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+#plot_results(n)
 
 # export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
