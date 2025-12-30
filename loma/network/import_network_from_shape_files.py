@@ -986,7 +986,7 @@ def implement_switches_LV(n, input_path):
     return n
 
 
-def fix_grid_infrastructure(n, min_size=2500):
+def fix_grid_infrastructure(n, min_size=2600):
     # Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
     if not loop_lines.empty:
