@@ -103,7 +103,7 @@ def create_gdf_from_shape(input_folder):
             },
             inplace=True,
         )
-
+   
     # component-type-column for distinguish the components
     LV_lines["comp_type"] = "lv_line"
     if not MV_lines.empty:
@@ -165,7 +165,7 @@ def create_gdf_from_shape(input_folder):
 
     return buses, lines
 
-
+#not used currently
 def merge_connected_mv_lines(lines, tolerance=0.001):
     """
     If MV-Lines are just splitted by "Muffe" the lines will be merged together and treated as one line
@@ -232,6 +232,142 @@ def merge_connected_mv_lines(lines, tolerance=0.001):
     lines = lines[lines.comp_type != "mv_line"]
     lines = pd.concat([lines, merged_gdf], ignore_index=True)
     return lines
+
+
+def merge_lines_splitted_by_bus(n, remove_buses=True, tolerance=0.001):
+    """
+    Iteratively merge lines in a PyPSA Network which are only separated by
+    degree-2 buses without attached components. Modifies `n` in-place.
+    """
+
+    total_merged = 0
+
+    def single_pass():
+        merged_count = 0
+        candidates = []
+
+        # --- collect merge candidates ---
+        for bus in list(n.buses.index):
+            incident = n.lines[(n.lines.bus0 == bus) | (n.lines.bus1 == bus)]
+            if len(incident) != 2:
+                continue
+
+            # skip buses with attached components
+            attached = False
+            for comp in ["Generator", "Load", "StorageUnit", "Link", "Transformer"]:
+                df = n.df(comp)
+                if df is None or df.empty:
+                    continue
+                if comp in ["Transformer", "Link"]:
+                    if ((df.get("bus0") == bus) | (df.get("bus1") == bus)).any():
+                        attached = True
+                        break
+                else:
+                    if (df.get("bus") == bus).any():
+                        attached = True
+                        break
+
+            if attached:
+                continue
+
+            l1, l2 = incident.index.tolist()
+            geom1 = incident.loc[l1, "geom"]
+            geom2 = incident.loc[l2, "geom"]
+            bus_geom = n.buses.loc[bus, "geom"]
+
+            s1, e1 = Point(geom1.coords[0]), Point(geom1.coords[-1])
+            s2, e2 = Point(geom2.coords[0]), Point(geom2.coords[-1])
+
+            p1 = s1 if s1.distance(bus_geom) <= tolerance else e1
+            p2 = s2 if s2.distance(bus_geom) <= tolerance else e2
+
+            if p1.distance(p2) <= tolerance:
+                candidates.append((bus, l1, l2))
+
+        # --- process candidates ---
+        for bus, l1, l2 in candidates:
+            if bus not in n.buses.index:
+                continue
+            if l1 not in n.lines.index or l2 not in n.lines.index:
+                continue
+
+            def other_bus(line, mid):
+                row = n.lines.loc[line]
+                return row.bus1 if row.bus0 == mid else row.bus0
+
+            bus_a = other_bus(l1, bus)
+            bus_c = other_bus(l2, bus)
+            if bus_a == bus_c:
+                continue
+
+            geom1 = n.lines.at[l1, "geom"]
+            geom2 = n.lines.at[l2, "geom"]
+
+            merged_geom = linemerge(unary_union([geom1, geom2]))
+            if merged_geom.geom_type == "MultiLineString":
+                merged_geom = max(merged_geom.geoms, key=lambda g: g.length)
+
+            # aggregate attributes
+            r_new = n.lines.at[l1, "r"] + n.lines.at[l2, "r"]
+            x_new = n.lines.at[l1, "x"] + n.lines.at[l2, "x"]
+            length_new = (
+                n.lines.at[l1, "length"] + n.lines.at[l2, "length"]
+            )
+
+            s1 = n.lines.at[l1, "s_nom"]
+            s2 = n.lines.at[l2, "s_nom"]
+            s_nom_new = min(s1, s2)
+            
+            capital_new = 0.0
+            if "capital_cost" in n.lines.columns:
+                capital_new = (
+                    float(n.lines.at[l1, "capital_cost"] or 0)
+                    + float(n.lines.at[l2, "capital_cost"] or 0)
+                )
+
+            base_name = f"{l1}_{l2}_merged"
+            new_name = base_name
+            i = 0
+            while new_name in n.lines.index:
+                i += 1
+                new_name = f"{base_name}_{i}"
+
+            n.remove("Line", [l1, l2])
+
+            n.add(
+                "Line",
+                new_name,
+                bus0=bus_a,
+                bus1=bus_c,
+                carrier="AC",
+                r=r_new,
+                x=x_new,
+                s_nom=s_nom_new,
+                s_nom_min=s_nom_new,
+                capital_cost=capital_new,
+                length=length_new,
+            )
+
+            n.lines.at[new_name, "geom"] = merged_geom
+
+            if remove_buses:
+                try:
+                    n.remove("Bus", [bus])
+                except Exception:
+                    pass
+
+            merged_count += 1
+
+        return merged_count
+
+    # --- iterative merging ---
+    while True:
+        merged = single_pass()
+        if merged == 0:
+            break
+        total_merged += merged
+
+    print(f"angepasste lines (gesamt): {total_merged}")
 
 
 ###LV-lines
@@ -965,9 +1101,9 @@ def implement_switches_LV(n, input_path):
         )
         return n
 
-    mask = n.lines.geom.apply(
-        lambda g: any(g.equals(o) for o in open_lines_geoms)
-    )
+    #mask = n.lines.geom.apply(
+     #   lambda g: any(g.equals(o) for o in open_lines_geoms)
+    #)
     # deleted_lines = n.lines[mask]
     # print(f"This lines are deleted:{deleted_lines.index.tolist()}")
 
@@ -986,7 +1122,7 @@ def implement_switches_LV(n, input_path):
     return n
 
 
-def fix_grid_infrastructure(n, min_size=2500):
+def fix_grid_infrastructure(n, min_size=3500):
     # Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
     if not loop_lines.empty:
@@ -1105,7 +1241,35 @@ def import_ev_chargers(n):
     # use shapefile for ladesäulen
     return
 
+def export_shape_files_from_network(n, output_path):
+      buses_path = os.path.join(output_path, "buses_final.shp")
+      buses = n.buses.copy()
 
+      buses["geometry"] = [
+            Point(xy) for xy in zip(buses["x"], buses["y"])
+            ]
+
+      gdf_buses = gpd.GeoDataFrame(
+          buses,
+          geometry="geometry",
+          crs="EPSG:32632"  
+      )  
+      
+      gdf_buses.to_file(buses_path)
+      
+      lines_path = os.path.join(output_path, "lines_final.shp")
+      lines = n.lines.copy()
+      
+      gdf_lines = gpd.GeoDataFrame(
+          lines,
+          geometry="geom",
+          crs="EPSG:32632"
+      )
+      gdf_lines.to_file(lines_path)
+      
+      
+      
+      
 def create_pypsa_network(
     shape_files_folder,
     q_households_folder,
@@ -1153,19 +1317,22 @@ def create_pypsa_network(
         f"{len(n.lines)} lines"
     )
 
-    if export_shape_files:
-        print("=== [7/10] Exporting grid shapefiles ===")
-        os.makedirs("results", exist_ok=True)
-        buses = buses.drop(columns=["geometry"])
-        buses.to_file("results/grid_buses.shp")
-        lines.to_file("results/grid_lines.shp")
-        print("    -> Shapefiles written to ./results")
 
-    print("=== [8/10] Implementing LV switches ===")
+    print("=== [7/10] Implementing LV switches ===")
     n = implement_switches_LV(n, switches_folder)
 
-    print("=== [9/10] Fixing grid infrastructure ===")
+    print("=== [8/10] Fixing grid infrastructure ===")
     fix_grid_infrastructure(n)
+    
+    print("=== [9/10] Merge lines, just seperated by unused bus ===")
+    merge_lines_splitted_by_bus(n)
+    
+    if export_shape_files:
+        print("=== [10/10] Exporting grid shapefiles ===")
+        os.makedirs("results", exist_ok=True)
+        export_shape_files_from_network(n, "./results")
+        print("    -> Shapefiles written to ./results")
+    
 
     print("=== Network creation finished successfully ===")
 
