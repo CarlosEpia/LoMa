@@ -221,8 +221,8 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     ]
     transformers_hv = pd.DataFrame(index=trafo_hv.index)
     transformers_hv["name"] = trafo_hv.index
-    transformers_hv["bus0"] = trafo_hv.bus1
-    transformers_hv["bus1"] = trafo_hv.bus0
+    transformers_hv["bus0"] = trafo_hv.bus0
+    transformers_hv["bus1"] = trafo_hv.bus1
     transformers_hv["x"] = np.nan
     transformers_hv["r"] = np.nan
     transformers_hv["s_nom"] = trafo_hv.s_nom
