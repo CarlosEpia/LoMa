@@ -107,7 +107,7 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
         "EPSG:32632", "EPSG:4326", always_xy=True
     )
     buses["v_nom"] = buses["name"].apply(
-        lambda x: 10 if "MS" in x else (10 if "MV" in x else 0.4)
+        lambda x: 10 if "MS" in x else (10 if "MV" in x else (110 if "HV" in x else 0.4))
     )
     buses["x"] = n.buses.x
     buses["y"] = n.buses.y
@@ -116,7 +116,7 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     )
     buses["mv_grid_id"] = 35725  # mv_grid_id from ding0 Husum grid
     buses["lv_grid_id"] = buses["name"].apply(
-        lambda x: np.nan if "MS" in x else (np.nan if "MV" in x else 1)
+          lambda x: np.nan if ("MS" in x or "MV" in x or "HV" in x) else 1
     )  # toDo: check how to define this value the right way
     buses["in_building"] = False
 
