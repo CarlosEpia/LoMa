@@ -899,8 +899,8 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
                 / 1e6
             )
         else:
-            r = 0.3
-            x = 0.05
+            r = 0.3 * length_km
+            x = 0.05* length_km
             s_nom = 1
 
         capital_costs = 100000  # ToDo: adjust default values!!!
