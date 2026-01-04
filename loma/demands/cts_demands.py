@@ -63,7 +63,7 @@ def assign_cts_demand_to_buses(network, cts_demands):
 
     cts_demands_t = cts_demands["p_set"].copy()
 
-    cts_demands["carrier"] = "AC"
+    cts_demands["carrier"] = "conventional_load"
     cts_demands["sign"] = -1
     cts_demands["q_set"] = 0
     cts_demands["p_set"] = 0
