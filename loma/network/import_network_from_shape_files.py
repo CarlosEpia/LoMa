@@ -798,18 +798,29 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
 
     #### ------- add lines to network ------###
     # prepare KDTree
-    bus_coords = np.array(
-        [[geom.centroid.x, geom.centroid.y] for geom in buses.geometry]
+    lv_buses = buses[~buses.comp_type.isin(["MV_Muffe"])]
+    lv_coords = np.array(
+        [[geom.centroid.x, geom.centroid.y] for geom in lv_buses.geometry]
     )
-    bus_tree = cKDTree(bus_coords)
+    lv_tree = cKDTree(lv_coords)
 
     # trafo / distributor set + KDTree
     traf_buses = buses[buses.comp_type.isin(["distributor", "trafo"])]
-
+    
     traf_coords = np.array(
         [[geom.centroid.x, geom.centroid.y] for geom in traf_buses.geometry]
     )
     traf_tree = cKDTree(traf_coords)
+    
+    #mv_buses (mv_joints) set
+    mv_buses = buses[
+    buses.comp_type.isin(["MV_Muffe", "trafo", "distributor", "trafo_HV"])
+      ]
+      
+    mv_coords = np.array(
+        [[geom.centroid.x, geom.centroid.y] for geom in mv_buses.geometry]
+    )
+    mv_tree = cKDTree(mv_coords)
 
     def process_line(row):
         line_id = row["line_id"]
@@ -819,12 +830,19 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
 
         comp_type = row["comp_type"]
         cable_type = row["KABELTYP"]
+        
+        if comp_type == "mv_line":
+              buses_use = mv_buses
+              tree_use = mv_tree
+        else:
+              buses_use = lv_buses
+              tree_use = lv_tree
 
         # nearest bus to line_start
-        bus0, dist0 = get_nearest_bus_robust(start_point, buses, tree=bus_tree)
+        bus0, dist0 = get_nearest_bus_robust(start_point, buses_use, tree=tree_use)
 
         # nearest bus to line_end
-        bus1, dist1 = get_nearest_bus_robust(end_point, buses, tree=bus_tree)
+        bus1, dist1 = get_nearest_bus_robust(end_point, buses_use, tree=tree_use)
 
         # ---- Starting point ----
         if 10 > dist0 > 0.1:
@@ -834,19 +852,12 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
             if traf_dist < 10:
                 bus0, dist0 = traf_bus, traf_dist
             else:
-                if comp_type != "mv_line":
-                    bus0, dist0 = get_nearest_bus_robust(
-                        start_point, buses, tree=bus_tree
+                bus0, dist0 = get_nearest_bus_robust(
+                        start_point, buses_use, tree=tree_use
                     )
-                    print(
+                print(
                         f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
                     )
-                else:
-                    print(
-                        f"MV_Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
-                    )
-                    return None  # signal -> skip
-
         elif dist0 >= 10:
             print(
                 f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
@@ -861,19 +872,12 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
             if traf_dist < 10:
                 bus1, dist1 = traf_bus, traf_dist
             else:
-                if comp_type != "mv_line":
-                    bus1, dist1 = get_nearest_bus_robust(
-                        end_point, buses, tree=bus_tree
+                bus1, dist1 = get_nearest_bus_robust(
+                        end_point, buses_use, tree=tree_use
                     )
-                    print(
+                print(
                         f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
                     )
-                else:
-                    print(
-                        f"MV_Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
-                    )
-                    return None  # skip
-
         elif dist1 >= 10:
             print(
                 f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
@@ -987,7 +991,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
               s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
         else: 
               bus1 = f"{bus.name}_MV"
-              bus0 = f"{bus.name}_HV"  # Same bus for MV level
+              bus0 = f"{bus.name}_HV"  # Same bus for HV level
               s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 63
               ### to add both MV- and HV-bus to network
               n.add(
@@ -1076,7 +1080,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
     ]
     for c in carriers:
         n.add("Carrier", c)
-
+    
     return buses, lines
 
 
@@ -1323,7 +1327,6 @@ def create_pypsa_network(
         f"{len(n.lines)} lines"
     )
 
-
     print("=== [7/10] Implementing LV switches ===")
     n = implement_switches_LV(n, switches_folder)
 
@@ -1331,7 +1334,7 @@ def create_pypsa_network(
     fix_grid_infrastructure(n)
     
     print("=== [9/10] Merge lines, just seperated by unused bus ===")
-    merge_lines_splitted_by_bus(n)
+    #merge_lines_splitted_by_bus(n)
     
     if export_shape_files:
         print("=== [10/10] Exporting grid shapefiles ===")
