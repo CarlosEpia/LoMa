@@ -317,7 +317,8 @@ def merge_lines_splitted_by_bus(n, remove_buses=True, tolerance=0.001):
             s1 = n.lines.at[l1, "s_nom"]
             s2 = n.lines.at[l2, "s_nom"]
             s_nom_new = min(s1, s2)
-            
+            comp_type_new = n.lines.at[l1, "comp_type"]
+            cable_type_new = n.lines.at[l1, "cable_type"]
             capital_new = 0.0
             if "capital_cost" in n.lines.columns:
                 capital_new = (
@@ -343,12 +344,15 @@ def merge_lines_splitted_by_bus(n, remove_buses=True, tolerance=0.001):
                 r=r_new,
                 x=x_new,
                 s_nom=s_nom_new,
+                s_nom_extendable = True,
                 s_nom_min=s_nom_new,
                 capital_cost=capital_new,
                 length=length_new,
             )
 
             n.lines.at[new_name, "geom"] = merged_geom
+            n.lines.at[new_name, "comp_type"] = comp_type_new
+            n.lines.at[new_name, "cable_type"] = cable_type_new
 
             if remove_buses:
                 try:
