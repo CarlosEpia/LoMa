@@ -106,9 +106,7 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     transformer = Transformer.from_crs(
         "EPSG:32632", "EPSG:4326", always_xy=True
     )
-    buses["v_nom"] = buses["name"].apply(
-        lambda x: 10 if "MS" in x else (10 if "MV" in x else (110 if "HV" in x else 0.4))
-    )
+    buses["v_nom"] = buses["v_nom"]
     buses["x"] = n.buses.x
     buses["y"] = n.buses.y
     buses["x"], buses["y"] = transformer.transform(
