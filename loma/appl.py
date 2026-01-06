@@ -13,6 +13,7 @@ from loma.demands.create_industrial_demand import (
 from loma.demands.cts_demands import inser_cts_demand_per_building
 from loma.demands.import_household_demand import distribute_household_demand
 from loma.network.import_network_from_shape_files import create_pypsa_network
+from loma.network.correct_meshes_grid import avoid_meshes_in_network
 from loma.demands.import_EV_demand import import_EV_loads
 from loma.demands.import_EV_demand import import_EV_demands
 from loma.demands.import_hp_demand import add_heat_loads_to_network
@@ -73,6 +74,9 @@ n = create_pypsa_network(
     household_dist_df,
 )
 
+#avoid meshes in the grid
+n = avoid_meshes_in_network(n)
+
 # insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
     n,
@@ -86,12 +90,12 @@ n = insert_pv_rooftop_and_battery(
 n = distribute_household_demand(n, household_dist_df)
 
 # insert cts demand
-n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
+#n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
 
 # insert industrial demands
-n = insert_ind_demand_per_building(
-    n, args["path_to_shapefile_MV_grid"], args["nuts3_focus_region"]
-)
+#n = insert_ind_demand_per_building(
+    #n, args["path_to_shapefile_MV_grid"], args["nuts3_focus_region"]
+#)
 
 # insert_heat_loas_for_heat_pump_location
 n = add_heat_loads_to_network(n)
@@ -105,9 +109,13 @@ n = import_EV_demands(n)
 
 
 ##manual adjustements for solvable model
-n.transformers.capital_cost = 0.1
+n.transformers.capital_cost =0
 n.generators.p_nom_extendable = True
-n.generators.capital_cost = 10
+n.lines.s_nom_extendable =True
+n.generators.capital_cost = 0
+
+
+
 
 from datetime import datetime
 
@@ -115,9 +123,16 @@ print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # Optimize
 n.optimize(
-    snapshots=n.snapshots[12:15],
+    snapshots=n.snapshots[12:13],
     solver_name="highs",
-    # extra_functionality=load_reduction_constraint_14a,
+    solver_options= {
+        "BarConvTol": 1.0e-5,
+        "FeasibilityTol": 1.0e-5,
+        "method": 2,
+        "crossover": 0,
+        "logFile": "solver_etrago.log",
+        "threads": 4,
+        "BarHomogeneous": 1,}
 )
 
 print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

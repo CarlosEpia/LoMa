@@ -113,9 +113,7 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
         buses["x"].values, buses["y"].values
     )
     buses["mv_grid_id"] = 35725  # mv_grid_id from ding0 Husum grid
-    buses["lv_grid_id"] = buses["name"].apply(
-          lambda x: np.nan if ("MS" in x or "MV" in x or "HV" in x) else 1
-    )  # toDo: check how to define this value the right way
+    buses["lv_grid_id"] = n.buses.lv_grid_id
     buses["in_building"] = False
 
     ## generators
@@ -177,7 +175,7 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
             else "industrial" if "ind" in x.lower() else "residential"
         )
     )
-    loads["number_households"] = 1
+    loads["number_households"] = 1   
     loads["voltage_level"] = "lv "  ###adjust if there are also mv_loads
 
     ### network

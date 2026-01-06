@@ -995,8 +995,8 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
               bus0 = f"{bus1}_MV"  # Same bus for MV level
               s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
         else: 
-              bus1 = f"{bus.name}_MV"
-              bus0 = f"{bus.name}_HV"  # Same bus for HV level
+              bus1 = f"{bus.name}_HV"
+              bus0 = f"{bus.name}_MV"  # Same bus for HV level
               s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 63
               ### to add both MV- and HV-bus to network
               n.add(
@@ -1136,7 +1136,7 @@ def implement_switches_LV(n, input_path):
 
 
 
-def fix_grid_infrastructure(n, min_size=2600):
+def fix_grid_infrastructure(n, min_size=3000):
 
     # Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
