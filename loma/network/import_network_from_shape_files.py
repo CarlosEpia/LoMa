@@ -795,8 +795,11 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         n.buses.at[row["bus_id"], "household_count"] = row["household_count"]
         n.buses.at[row["bus_id"], "trafo_cap"] = row["s_nom"]
         n.buses.at[row["bus_id"], "geom"] = row["geometry"]
-    n.buses[n.buses.comp_type=='MV_Muffe'].v_nom=20
-    n.buses[n.buses.comp_type!='MV_Muffe'].v_nom=0.4
+        
+    mask_mv = n.buses.comp_type == "MV_Muffe"
+    n.buses.loc[mask_mv, "v_nom"] = 20
+    n.buses.loc[~mask_mv, "v_nom"] = 0.4
+    
 
     #### ------- add lines to network ------###
     # prepare KDTree
