@@ -13,7 +13,7 @@ from loma.demands.create_industrial_demand import (
 from loma.demands.cts_demands import inser_cts_demand_per_building
 from loma.demands.import_household_demand import distribute_household_demand
 from loma.network.import_network_from_shape_files import create_pypsa_network
-from loma.network.correct_meshes_grid import avoid_meshed_in_network
+from loma.network.correct_meshed_grid import avoid_meshes_in_network
 from loma.demands.import_EV_demand import import_EV_loads
 from loma.demands.import_EV_demand import import_EV_demands
 from loma.demands.import_hp_demand import add_heat_loads_to_network
@@ -75,7 +75,7 @@ n = create_pypsa_network(
 )
 
 #avoid meshes in the grid
-n = avoid_meshed_in_network(n)
+n = avoid_meshes_in_network(n)
 
 # insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
