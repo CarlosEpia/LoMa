@@ -13,7 +13,7 @@ from loma.demands.create_industrial_demand import (
 from loma.demands.cts_demands import inser_cts_demand_per_building
 from loma.demands.import_household_demand import distribute_household_demand
 from loma.network.import_network_from_shape_files import create_pypsa_network
-from loma.network.correct_meshes_grid import avoid_meshes_in_network
+from loma.network.correct_meshes_grid import avoid_meshed_in_network
 from loma.demands.import_EV_demand import import_EV_loads
 from loma.demands.import_EV_demand import import_EV_demands
 from loma.demands.import_hp_demand import add_heat_loads_to_network
@@ -75,7 +75,7 @@ n = create_pypsa_network(
 )
 
 #avoid meshes in the grid
-n = avoid_meshes_in_network(n)
+n = avoid_meshed_in_network(n)
 
 # insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
@@ -90,12 +90,12 @@ n = insert_pv_rooftop_and_battery(
 n = distribute_household_demand(n, household_dist_df)
 
 # insert cts demand
-#n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
+n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
 
 # insert industrial demands
-#n = insert_ind_demand_per_building(
-    #n, args["path_to_shapefile_MV_grid"], args["nuts3_focus_region"]
-#)
+n = insert_ind_demand_per_building(
+    n, args["path_to_shapefile_MV_grid"], args["nuts3_focus_region"]
+)
 
 # insert_heat_loas_for_heat_pump_location
 n = add_heat_loads_to_network(n)
@@ -105,7 +105,7 @@ n = import_EV_loads(n, args["path_to_shapefiles_grid"])
 n = import_EV_demands(n)
 
 # insert heat pump flexibilities
-#n = insert_heat_pump_flexibilities_14a(n)
+n = insert_heat_pump_flexibilities_14a(n)
 
 
 ##manual adjustements for solvable model
@@ -141,4 +141,4 @@ print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
-prepare_ding0_shape_export(n, "./results/Whole_Husum_model")
+prepare_ding0_shape_export(n, "./results/Whole_Husum_model_no_LV_meshes")

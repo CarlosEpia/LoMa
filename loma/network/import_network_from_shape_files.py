@@ -1248,11 +1248,6 @@ def fix_grid_infrastructure(n, min_size=3000):
     return n
 
 
-def import_ev_chargers(n):
-
-    # use shapefile for ladesäulen
-    return
-
 def export_shape_files_from_network(n, output_path):
       buses_path = os.path.join(output_path, "buses_final.shp")
       buses = n.buses.copy()
