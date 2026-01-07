@@ -983,11 +983,8 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         results_df[["line_id", "bus0", "bus1"]], on="line_id", how="left"
     )
 
-    ### ---- add transformator to network (connect an generator at each trafo for test reasons -----###
+    ### ---- add transformator to network (connect an generator at each hv trafo for test reasons -----###
     trafo_buses = n.buses[n.buses.comp_type.str.contains("trafo")]
-    n.buses = n.buses.drop(
-        "trafo_cap", axis="columns"
-    )  # trafo_cap column isn't used anymore
     for idx, bus in trafo_buses.iterrows():
         comp = bus.comp_type
         if bus.comp_type =='trafo':
@@ -995,14 +992,14 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
               bus0 = f"{bus1}_MV"  # Same bus for MV level
               s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
         else: 
-              bus1 = f"{bus.name}_HV"
-              bus0 = f"{bus.name}_MV"  # Same bus for HV level
+              bus1 = f"{bus.name}_MV"
+              bus0 = f"{bus.name}_HV"  # Same bus for HV level
               s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 63
               ### to add both MV- and HV-bus to network
               n.add(
                   "Bus",
                   name=bus1,
-                  v_nom=110,
+                  v_nom=20,
                   carrier="AC",
                   household_count=bus.household_count,
                   x=bus.x,
