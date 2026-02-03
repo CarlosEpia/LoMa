@@ -24,7 +24,7 @@ from loma.constraints.constraints import load_reduction_constraint_14a
 from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
     insert_pv_rooftop_and_battery,
 )
-from loma.MGB_Model_into_ding0_shape import prepare_ding0_shape_export
+from loma.pypsa_model_into_ding0_shape import prepare_ding0_shape_export
 from loma.plot_results import plot_results
 
 args = {
@@ -75,7 +75,7 @@ n = create_pypsa_network(
 )
 
 #avoid meshes in the grid
-n = avoid_meshes_in_network(n)
+#n = avoid_meshes_in_network(n)
 
 # insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
@@ -141,4 +141,4 @@ print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
-prepare_ding0_shape_export(n, "./results/Whole_Husum_model_no_LV_meshes")
+prepare_ding0_shape_export(n, "./results/Whole_Husum_model")
