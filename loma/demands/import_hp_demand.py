@@ -201,14 +201,6 @@ def add_heat_loads_to_network(n):
         cop_air = calculate_cop_air(temp_air["TT_TU"])
         elec_profile = hourly_profile / cop_air
         
-        #cop_timeseries export for edisgo usage
-        import os
-
-        output_dir = "./results/Whole_Husum_model/timeseries"
-        os.makedirs(output_dir, exist_ok=True)
-            
-        cop_air.to_csv(os.path.join(output_dir, "cop_timeseries.csv"))
-        
         if (
             elec_profile.max() < 0.0005
         ):  # ToDo: Discuss if adjustemnt of value is necessary

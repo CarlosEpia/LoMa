@@ -12,6 +12,8 @@ import pypsa
 import os
 import numpy as np
 
+from loma.demands.import_hp_demand import calculate_cop_air 
+
 ###translate pypsa network into ding0 shape
 
 
@@ -286,6 +288,15 @@ def export_timeseries(n, export_path):
     gens_ts = n.generators_t.p_max_pu
     gens_ts.to_csv(
         os.path.join(export_path, "gen_p_max_pu_timeseries.csv"), index=True
+    )
+    
+    #export cop timeseries for edisgo usage
+    temp_air = pd.read_csv(
+            "data/data_bundle/wetterdaten_2011_Luft.csv"
+        ).set_index("MESS_DATUM")
+    cop_air = calculate_cop_air(temp_air["TT_TU"])
+    cop_air.to_csv(
+        os.path.join(export_path, "cop_timeseries.csv"), index=True
     )
 
 
