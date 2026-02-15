@@ -24,9 +24,9 @@ def add_dummy_mv_grid(n):
         - new HV-bus and HV/MV Transformer
     """
 
-    mv_candidates = [bus for bus in n.buses.index if "MS" in bus]
+    mv_candidates = [bus for bus in n.buses.index if "MV" in bus]
     if not mv_candidates:
-        raise ValueError("Kein MV-Bus mit 'MS' im Namen gefunden!")
+        raise ValueError("Kein MV-Bus mit 'MV' im Namen gefunden!")
     existing_mv_bus = mv_candidates[0]
 
     # Optional: Use coordinates from existing Mv_bus
@@ -63,10 +63,9 @@ def add_dummy_mv_grid(n):
         overwrite=True,
     )
 
-    hv_bus_name = "HV_dummy_bus"
-    """
     # new trafo connection to HV-level
     hv_bus_name = "HV_dummy_bus"
+    """
     n.add("Bus",
           name=hv_bus_name,
           v_nom=110,
@@ -74,7 +73,7 @@ def add_dummy_mv_grid(n):
           y=y_existing + 0.1,
           carrier="AC",
           overwrite=True)
-    
+    """
     # New Genertaor 
     n.add("Generator",
           name="HV_dummy_gen_slack",
@@ -82,10 +81,8 @@ def add_dummy_mv_grid(n):
           p_nom=1,            # 1 MW
           carrier="AC",
           control='Slack',
-          marginal_cost=50,
-          efficiency=0.9,
-          overwrite=True)
-    """
+          marginal_cost=50)
+  
     n.add(
         "Transformer",
         name="MV_to_HV_dummy_trafo",
@@ -94,10 +91,12 @@ def add_dummy_mv_grid(n):
         s_nom=63,  # 2 MVA
         x=0.1,
         r=0.01,
+        comp_type='trafo_HV',
         overwrite=True,
     )
-
+    
     return n
+
 
 
 def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
@@ -200,7 +199,9 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     )
 
     ### transformers lv/mv     ###todo anpassen der trafo definition und exkludieren des HVMV trafos dabei
-    trafos = n.transformers
+    trafos = n.transformers[
+        n.transformers.comp_type !='trafo_HV'
+    ]
     transformers = pd.DataFrame(index=trafos.index)
     transformers["name"] = trafos.index
     transformers["bus0"] = trafos.bus0
@@ -280,12 +281,14 @@ def export_timeseries(n, export_path):
 
     # export load_timeseries
     loads_ts = n.loads_t.p_set
+    loads_ts.index.name = "snapshot"
     loads_ts.to_csv(
         os.path.join(export_path, "load_timeseries.csv"), index=True
     )
 
     # export p_max_pu for load_shedding_gens
     gens_ts = n.generators_t.p_max_pu
+    gens_ts.index.name = "snapshot"
     gens_ts.to_csv(
         os.path.join(export_path, "gen_p_max_pu_timeseries.csv"), index=True
     )
@@ -301,6 +304,7 @@ def export_timeseries(n, export_path):
 
 
 def prepare_ding0_shape_export(n, export_path):
-    #n = add_dummy_mv_grid(n)
+    if len(n.buses)<1000:
+          n = add_dummy_mv_grid(n)
     adjust_network_shape(n, export_path)
     export_timeseries(n, export_path)

@@ -1098,42 +1098,48 @@ def open_LV_circle(n, lv_line_idx):
 
 def implement_switches_LV(n, input_path):
     try:
-        lines_with_switches = gpd.read_file(input_path)
+        switches = gpd.read_file(input_path)
     except Exception as e:
-        print(f"Not possible to read switches Input file {input_path}: {e}")
+        print(f"Fehler: {e}")
         return n
 
-    open_lines_geoms = lines_with_switches["geometry"].tolist()
+    # 1. n.lines temporär in GeoDataFrame umwandeln
+    # Wichtig: 'geom' (oder 'geometry') muss die Geometrie-Objekte enthalten
+    gdf_lines = gpd.GeoDataFrame(n.lines, geometry='geom', crs=switches.crs)
 
-    if not open_lines_geoms:
-        print(
-            "Keine offenen (zu löschenden) Leitungsgeometrien in der Shapefile gefunden. Netzwerk bleibt unverändert."
-        )
-        return n
+    # 2. Räumliche Suche: Finde Indizes der Linien, die am nächsten an den Switches liegen
+    # max_distance fängt Rundungsfehler ab (z.B. 0.001 Meter)
+    # 1. Erstelle Punkte, die in der Mitte jeder Schalter-Leitung liegen
+    if switches.crs != gdf_lines.crs:
+        switches = switches.to_crs(gdf_lines.crs)
 
-    #mask = n.lines.geom.apply(
-     #   lambda g: any(g.equals(o) for o in open_lines_geoms)
-    #)
-    # deleted_lines = n.lines[mask]
-    # print(f"This lines are deleted:{deleted_lines.index.tolist()}")
+    # 2. Erstelle einen winzigen Puffer um die Schalter (z.B. 2cm)
+    # Das macht aus der Linie eine schmale Fläche
+    switches_buffered = switches.copy()
+    switches_buffered['geometry'] = switches.geometry.buffer(0.02) 
 
-    initial_line_count = len(n.lines)
-    n.lines = n.lines[~n.lines.geom.isin(open_lines_geoms)]
-
-    lines_deleted = initial_line_count - len(n.lines)
-
-    print(
-        f"Switches implemented. {lines_deleted} lines were deleted due to open switches."
+    # 3. Räumlicher Join: Welche Leitung liegt INNERHALB dieses Puffers?
+    # 'within' stellt sicher, dass die Leitung fast komplett im Puffer liegen muss
+    matches = gpd.sjoin(
+        gpd.GeoDataFrame(n.lines, geometry='geom', crs=switches.crs),
+        switches_buffered,
+        predicate='within',
+        how='inner'
     )
-    print(f"Remaining lines: {len(n.lines)}.")
+    indices_to_drop = matches.index.unique()
 
-    n = fix_grid_infrastructure(n)
+    if not indices_to_drop.empty:
+        print(f"Lösche {len(indices_to_drop)} Linien mit Indizes: {indices_to_drop.tolist()}")
+        n.lines = n.lines.drop(indices_to_drop)
+    else:
+        print("Keine passenden Geometrien zum Löschen gefunden.")
 
+    n = fix_grid_infrastructure(n) 
     return n
 
 
 
-def fix_grid_infrastructure(n, min_size=3000):
+def fix_grid_infrastructure(n):
 
     # Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
@@ -1206,43 +1212,44 @@ def fix_grid_infrastructure(n, min_size=3000):
 
                 n.remove(comp, to_remove)
 
-    # Erkenne Subnetzwerke
     G = n.graph()
     components = list(nx.connected_components(G))
-
-    for comp in components:
-        if len(comp) < min_size:
-            print(
-                f"⚠️ Small subnetwork with {len(comp)} Buses found: {sorted(list(comp))[:5]} ..."
-            )
-            # Lösche alle Busse im Subnetz
+      
+    # 2. Die Komponenten nach Größe sortieren (absteigend)
+    # Das größte Subnetz steht danach an Index 0
+    components = sorted(components, key=len, reverse=True)
+      
+    if components:
+        main_component = components[0]
+        subnetworks_to_remove = components[1:] # Alles außer dem Größten
+      
+        print(f"✅ Main Subnetwork found: {len(main_component)} Buses.")
+          
+        # 3. Alle kleineren Subnetze entfernen
+        for comp in subnetworks_to_remove:
+            print(f"⚠️ Removing subnetwork with {len(comp)} Buses...")
+              
+            # In PyPSA reicht es oft, die Busse zu löschen; 
+            # n.mremove entfernt effizienter als eine Schleife
+              
+            # Erst Busse löschen
             n.remove("Bus", list(comp))
-            # Lösche alle Komponenten, die an diesen Bussen hängen
-            for comp_name in [
-                "Generator",
-                "Transformer",
-                "Load",
-                "StorageUnit",
-                "Link",
-                "Line",
-            ]:
-                df = n.df(comp_name)
-                if comp_name in ["Transformer", "Link", "Line"]:
-                    to_remove = df[
-                        df.bus0.isin(comp) | df.bus1.isin(comp)
-                    ].index.tolist()
-                else:
-                    to_remove = df[df.bus.isin(comp)].index.tolist()
-                if to_remove:
-                    print(
-                        f"⚠️ Remove {len(to_remove)} {comp_name}(s) inside of the subnetwork"
-                    )
-                    n.remove(comp_name, to_remove)
-        else:
-            print(
-                f"⚠️ Main Subnetwork with {len(comp)} Buses found – will be maintained. Example buses:{sorted(list(comp))[:5]}"
-            )
-
+              
+            # Dann alle assoziierten Komponenten
+            for c in n.iterate_components(list(n.all_components - {"Bus"})):
+                  df = c.df
+                  if "bus" in df.columns:
+                      to_remove = df[df.bus.isin(comp)].index
+                  elif "bus0" in df.columns: # Für Lines, Links, Transformers
+                      to_remove = df[df.bus0.isin(comp) | df.bus1.isin(comp)].index
+                  else:
+                      continue
+                      
+                  if not to_remove.empty:
+                      n.remove(c.name, to_remove.tolist())
+    else:
+          print("❌ No components found in network.")
+      
     print("Infrastructure of network is fixed.")
 
     return n
