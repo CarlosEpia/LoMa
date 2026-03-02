@@ -995,6 +995,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
               bus1 = f"{bus.name}_MV"
               bus0 = f"{bus.name}_HV"  # Same bus for HV level
               s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 63
+
               ### to add both MV- and HV-bus to network
               n.add(
                   "Bus",
@@ -1007,7 +1008,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
                   geom=bus.geom,
                   comp_type=comp,
               )
-              
+              '''
               n.add(
                   "Generator",
                   name=f"gen_{idx}",
@@ -1018,7 +1019,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
                   #p_nom_extendable =True,
               )
               
-
+              '''
         n.add(
             "Bus",
             name=bus0,
