@@ -12,6 +12,8 @@ import pypsa
 import os
 import numpy as np
 
+from loma.demands.import_hp_demand import calculate_cop_air 
+
 ###translate pypsa network into ding0 shape
 
 
@@ -22,9 +24,9 @@ def add_dummy_mv_grid(n):
         - new HV-bus and HV/MV Transformer
     """
 
-    mv_candidates = [bus for bus in n.buses.index if "MS" in bus]
+    mv_candidates = [bus for bus in n.buses.index if "MV" in bus]
     if not mv_candidates:
-        raise ValueError("Kein MV-Bus mit 'MS' im Namen gefunden!")
+        raise ValueError("Kein MV-Bus mit 'MV' im Namen gefunden!")
     existing_mv_bus = mv_candidates[0]
 
     # Optional: Use coordinates from existing Mv_bus
@@ -61,10 +63,9 @@ def add_dummy_mv_grid(n):
         overwrite=True,
     )
 
-    hv_bus_name = "HV_dummy_bus"
-    """
     # new trafo connection to HV-level
     hv_bus_name = "HV_dummy_bus"
+    """
     n.add("Bus",
           name=hv_bus_name,
           v_nom=110,
@@ -72,7 +73,7 @@ def add_dummy_mv_grid(n):
           y=y_existing + 0.1,
           carrier="AC",
           overwrite=True)
-    
+    """
     # New Genertaor 
     n.add("Generator",
           name="HV_dummy_gen_slack",
@@ -80,10 +81,8 @@ def add_dummy_mv_grid(n):
           p_nom=1,            # 1 MW
           carrier="AC",
           control='Slack',
-          marginal_cost=50,
-          efficiency=0.9,
-          overwrite=True)
-    """
+          marginal_cost=50)
+  
     n.add(
         "Transformer",
         name="MV_to_HV_dummy_trafo",
@@ -92,10 +91,12 @@ def add_dummy_mv_grid(n):
         s_nom=63,  # 2 MVA
         x=0.1,
         r=0.01,
+        comp_type='trafo_HV',
         overwrite=True,
     )
-
+    
     return n
+
 
 
 def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
@@ -106,18 +107,19 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     transformer = Transformer.from_crs(
         "EPSG:32632", "EPSG:4326", always_xy=True
     )
-    buses["v_nom"] = buses["name"].apply(
-        lambda x: 10 if "MS" in x else (10 if "MV" in x else 0.4)
-    )
+    buses["v_nom"] = n.buses.v_nom
     buses["x"] = n.buses.x
     buses["y"] = n.buses.y
     buses["x"], buses["y"] = transformer.transform(
         buses["x"].values, buses["y"].values
     )
     buses["mv_grid_id"] = 35725  # mv_grid_id from ding0 Husum grid
-    buses["lv_grid_id"] = buses["name"].apply(
+    if "lv_grid" in n.buses.columns:
+          buses["lv_grid_id"] = n.buses.lv_grid_id
+    else:
+          buses["lv_grid_id"] = buses["name"].apply(
         lambda x: np.nan if "MS" in x else (np.nan if "MV" in x else 1)
-    )  # toDo: check how to define this value the right way
+    )
     buses["in_building"] = False
 
     ## generators
@@ -179,7 +181,7 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
             else "industrial" if "ind" in x.lower() else "residential"
         )
     )
-    loads["number_households"] = 1
+    loads["number_households"] = 1   
     loads["voltage_level"] = "lv "  ###adjust if there are also mv_loads
 
     ### network
@@ -197,7 +199,9 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     )
 
     ### transformers lv/mv     ###todo anpassen der trafo definition und exkludieren des HVMV trafos dabei
-    trafos = n.transformers
+    trafos = n.transformers[
+        n.transformers.comp_type !='trafo_HV'
+    ]
     transformers = pd.DataFrame(index=trafos.index)
     transformers["name"] = trafos.index
     transformers["bus0"] = trafos.bus0
@@ -221,8 +225,8 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     ]
     transformers_hv = pd.DataFrame(index=trafo_hv.index)
     transformers_hv["name"] = trafo_hv.index
-    transformers_hv["bus0"] = trafo_hv.bus1
-    transformers_hv["bus1"] = trafo_hv.bus0
+    transformers_hv["bus0"] = trafo_hv.bus0
+    transformers_hv["bus1"] = trafo_hv.bus1
     transformers_hv["x"] = np.nan
     transformers_hv["r"] = np.nan
     transformers_hv["s_nom"] = trafo_hv.s_nom
@@ -277,18 +281,30 @@ def export_timeseries(n, export_path):
 
     # export load_timeseries
     loads_ts = n.loads_t.p_set
+    loads_ts.index.name = "snapshot"
     loads_ts.to_csv(
         os.path.join(export_path, "load_timeseries.csv"), index=True
     )
 
     # export p_max_pu for load_shedding_gens
     gens_ts = n.generators_t.p_max_pu
+    gens_ts.index.name = "snapshot"
     gens_ts.to_csv(
         os.path.join(export_path, "gen_p_max_pu_timeseries.csv"), index=True
+    )
+    
+    #export cop timeseries for edisgo usage
+    temp_air = pd.read_csv(
+            "data/data_bundle/wetterdaten_2011_Luft.csv"
+        ).set_index("MESS_DATUM")
+    cop_air = calculate_cop_air(temp_air["TT_TU"])
+    cop_air.to_csv(
+        os.path.join(export_path, "cop_timeseries.csv"), index=True
     )
 
 
 def prepare_ding0_shape_export(n, export_path):
-    #n = add_dummy_mv_grid(n)
+    if len(n.buses)<1000:
+          n = add_dummy_mv_grid(n)
     adjust_network_shape(n, export_path)
     export_timeseries(n, export_path)

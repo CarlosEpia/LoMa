@@ -13,6 +13,7 @@ from loma.demands.create_industrial_demand import (
 from loma.demands.cts_demands import inser_cts_demand_per_building
 from loma.demands.import_household_demand import distribute_household_demand
 from loma.network.import_network_from_shape_files import create_pypsa_network
+from loma.network.correct_meshed_grid import avoid_meshes_in_network
 from loma.demands.import_EV_demand import import_EV_loads
 from loma.demands.import_EV_demand import import_EV_demands
 from loma.demands.import_hp_demand import add_heat_loads_to_network
@@ -23,7 +24,7 @@ from loma.constraints.constraints import load_reduction_constraint_14a
 from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
     insert_pv_rooftop_and_battery,
 )
-from loma.MGB_Model_into_ding0_shape import prepare_ding0_shape_export
+from loma.pypsa_model_into_ding0_shape import prepare_ding0_shape_export
 from loma.plot_results import plot_results
 
 args = {
@@ -53,9 +54,14 @@ args = {
         },  # U[v], I[A], R[Ohm/km], L[mH/km]
         "NAYY 4x95": {"U": 400, "I_max": 215, "R": 0.206, "L": 0.261},
         "NAYY 4x35": {"U": 400, "I_max": 123, "R": 0.868, "L": 0.271},
-        "NA2XS(F)2Y 3x150": {"U": 20000, "I_max": 319, "R": 0.206, "L": 0.4011},
-        }
-    }
+        "NA2XS(F)2Y 3x150": {
+            "U": 20000,
+            "I_max": 319,
+            "R": 0.206,
+            "L": 0.4011,
+        },
+    },
+}
 
 
 # household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
@@ -72,6 +78,9 @@ n = create_pypsa_network(
     args["switches_path"],
     household_dist_df,
 )
+
+# avoid meshes in the grid
+# n = avoid_meshes_in_network(n)
 
 # insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
@@ -101,16 +110,31 @@ n = import_EV_loads(n, args["path_to_shapefiles_grid"])
 n = import_EV_demands(n)
 
 # insert heat pump flexibilities
-#n = insert_heat_pump_flexibilities_14a(n)
+# n = insert_heat_pump_flexibilities_14a(n)
+
+
+from datetime import datetime
+
+print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # Optimize
 n.optimize(
-    snapshots=n.snapshots[12:15],
+    snapshots=n.snapshots[12:13],
     solver_name="highs",
-    # extra_functionality=load_reduction_constraint_14a,
+    solver_options={
+        "BarConvTol": 1.0e-5,
+        "FeasibilityTol": 1.0e-5,
+        "method": 2,
+        "crossover": 0,
+        "logFile": "solver_etrago.log",
+        "threads": 4,
+        "BarHomogeneous": 1,
+    },
 )
 
-plot_results(n)
+print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+# plot_results(n)
 
 # export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
