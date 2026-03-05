@@ -54,9 +54,14 @@ args = {
         },  # U[v], I[A], R[Ohm/km], L[mH/km]
         "NAYY 4x95": {"U": 400, "I_max": 215, "R": 0.206, "L": 0.261},
         "NAYY 4x35": {"U": 400, "I_max": 123, "R": 0.868, "L": 0.271},
-        "NA2XS(F)2Y 3x150": {"U": 20000, "I_max": 319, "R": 0.206, "L": 0.4011},
-        }
-    }
+        "NA2XS(F)2Y 3x150": {
+            "U": 20000,
+            "I_max": 319,
+            "R": 0.206,
+            "L": 0.4011,
+        },
+    },
+}
 
 
 # household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
@@ -74,8 +79,8 @@ n = create_pypsa_network(
     household_dist_df,
 )
 
-#avoid meshes in the grid
-#n = avoid_meshes_in_network(n)
+# avoid meshes in the grid
+# n = avoid_meshes_in_network(n)
 
 # insert solar_rooftop and home_batteries
 n = insert_pv_rooftop_and_battery(
@@ -108,15 +113,6 @@ n = import_EV_demands(n)
 # n = insert_heat_pump_flexibilities_14a(n)
 
 
-##manual adjustements for solvable model
-n.transformers.capital_cost =0
-n.generators.p_nom_extendable = True
-n.lines.s_nom_extendable =True
-n.generators.capital_cost = 0
-
-
-
-
 from datetime import datetime
 
 print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -125,19 +121,20 @@ print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 n.optimize(
     snapshots=n.snapshots[12:13],
     solver_name="highs",
-    solver_options= {
+    solver_options={
         "BarConvTol": 1.0e-5,
         "FeasibilityTol": 1.0e-5,
         "method": 2,
         "crossover": 0,
         "logFile": "solver_etrago.log",
         "threads": 4,
-        "BarHomogeneous": 1,}
+        "BarHomogeneous": 1,
+    },
 )
 
 print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-#plot_results(n)
+# plot_results(n)
 
 # export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
