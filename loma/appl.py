@@ -105,7 +105,7 @@ n = import_EV_loads(n, args["path_to_shapefiles_grid"])
 n = import_EV_demands(n)
 
 # insert heat pump flexibilities
-n = insert_heat_pump_flexibilities_14a(n)
+# n = insert_heat_pump_flexibilities_14a(n)
 
 
 ##manual adjustements for solvable model
