@@ -14,7 +14,6 @@ from loma.demands.cts_demands import inser_cts_demand_per_building
 from loma.demands.import_household_demand import distribute_household_demand
 from loma.network.import_network_from_shape_files import create_pypsa_network
 from loma.demands.import_EV_demand import import_charging_points
-from loma.demands.import_EV_demand import import_EV_demands
 from loma.demands.import_hp_demand import add_heat_loads_to_network
 from loma.network.flexibilities_14a_heat_pump import (
     insert_heat_pump_flexibilities_14a,
@@ -98,7 +97,6 @@ n = add_heat_loads_to_network(n)
 
 # insert EV_loads
 n = import_charging_points(n, args["path_to_shapefiles_grid"])
-n = import_EV_demands(n)
 
 # insert heat pump flexibilities
 #n = insert_heat_pump_flexibilities_14a(n)
@@ -114,4 +112,4 @@ n.optimize(
 
 # export model into ding0_shape ####
 #### define own export_folder in arguments of the functions
-#prepare_ding0_shape_export(n, "./results/Whole_Husum_model")
+prepare_ding0_shape_export(n, "./results/Whole_Husum_model")
