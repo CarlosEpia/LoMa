@@ -103,7 +103,7 @@ def create_gdf_from_shape(input_folder):
             },
             inplace=True,
         )
-
+   
     # component-type-column for distinguish the components
     LV_lines["comp_type"] = "lv_line"
     if not MV_lines.empty:
@@ -165,7 +165,7 @@ def create_gdf_from_shape(input_folder):
 
     return buses, lines
 
-
+#not used currently
 def merge_connected_mv_lines(lines, tolerance=0.001):
     """
     If MV-Lines are just splitted by "Muffe" the lines will be merged together and treated as one line
@@ -232,6 +232,146 @@ def merge_connected_mv_lines(lines, tolerance=0.001):
     lines = lines[lines.comp_type != "mv_line"]
     lines = pd.concat([lines, merged_gdf], ignore_index=True)
     return lines
+
+
+def merge_lines_splitted_by_bus(n, remove_buses=True, tolerance=0.001):
+    """
+    Iteratively merge lines in a PyPSA Network which are only separated by
+    degree-2 buses without attached components. Modifies `n` in-place.
+    """
+
+    total_merged = 0
+
+    def single_pass():
+        merged_count = 0
+        candidates = []
+
+        # --- collect merge candidates ---
+        for bus in list(n.buses.index):
+            incident = n.lines[(n.lines.bus0 == bus) | (n.lines.bus1 == bus)]
+            if len(incident) != 2:
+                continue
+
+            # skip buses with attached components
+            attached = False
+            for comp in ["Generator", "Load", "StorageUnit", "Link", "Transformer"]:
+                df = n.df(comp)
+                if df is None or df.empty:
+                    continue
+                if comp in ["Transformer", "Link"]:
+                    if ((df.get("bus0") == bus) | (df.get("bus1") == bus)).any():
+                        attached = True
+                        break
+                else:
+                    if (df.get("bus") == bus).any():
+                        attached = True
+                        break
+
+            if attached:
+                continue
+
+            l1, l2 = incident.index.tolist()
+            geom1 = incident.loc[l1, "geom"]
+            geom2 = incident.loc[l2, "geom"]
+            bus_geom = n.buses.loc[bus, "geom"]
+
+            s1, e1 = Point(geom1.coords[0]), Point(geom1.coords[-1])
+            s2, e2 = Point(geom2.coords[0]), Point(geom2.coords[-1])
+
+            p1 = s1 if s1.distance(bus_geom) <= tolerance else e1
+            p2 = s2 if s2.distance(bus_geom) <= tolerance else e2
+
+            if p1.distance(p2) <= tolerance:
+                candidates.append((bus, l1, l2))
+
+        # --- process candidates ---
+        for bus, l1, l2 in candidates:
+            if bus not in n.buses.index:
+                continue
+            if l1 not in n.lines.index or l2 not in n.lines.index:
+                continue
+
+            def other_bus(line, mid):
+                row = n.lines.loc[line]
+                return row.bus1 if row.bus0 == mid else row.bus0
+
+            bus_a = other_bus(l1, bus)
+            bus_c = other_bus(l2, bus)
+            if bus_a == bus_c:
+                continue
+
+            geom1 = n.lines.at[l1, "geom"]
+            geom2 = n.lines.at[l2, "geom"]
+
+            merged_geom = linemerge(unary_union([geom1, geom2]))
+            if merged_geom.geom_type == "MultiLineString":
+                merged_geom = max(merged_geom.geoms, key=lambda g: g.length)
+
+            # aggregate attributes
+            r_new = n.lines.at[l1, "r"] + n.lines.at[l2, "r"]
+            x_new = n.lines.at[l1, "x"] + n.lines.at[l2, "x"]
+            length_new = (
+                n.lines.at[l1, "length"] + n.lines.at[l2, "length"]
+            )
+
+            s1 = n.lines.at[l1, "s_nom"]
+            s2 = n.lines.at[l2, "s_nom"]
+            s_nom_new = min(s1, s2)
+            comp_type_new = n.lines.at[l1, "comp_type"]
+            cable_type_new = n.lines.at[l1, "cable_type"]
+            capital_new = 0.0
+            if "capital_cost" in n.lines.columns:
+                capital_new = (
+                    float(n.lines.at[l1, "capital_cost"] or 0)
+                    + float(n.lines.at[l2, "capital_cost"] or 0)
+                )
+
+            base_name = f"{l1}_{l2}_merged"
+            new_name = base_name
+            i = 0
+            while new_name in n.lines.index:
+                i += 1
+                new_name = f"{base_name}_{i}"
+
+            n.remove("Line", [l1, l2])
+
+            n.add(
+                "Line",
+                new_name,
+                bus0=bus_a,
+                bus1=bus_c,
+                carrier="AC",
+                r=r_new,
+                x=x_new,
+                s_nom=s_nom_new,
+                s_nom_extendable = True,
+                s_nom_min=s_nom_new,
+                capital_cost=capital_new,
+                length=length_new,
+            )
+
+            n.lines.at[new_name, "geom"] = merged_geom
+            n.lines.at[new_name, "comp_type"] = comp_type_new
+            n.lines.at[new_name, "cable_type"] = cable_type_new
+
+            if remove_buses:
+                try:
+                    n.remove("Bus", [bus])
+                except Exception:
+                    pass
+
+            merged_count += 1
+
+        return merged_count
+
+    # --- iterative merging ---
+    while True:
+        merged = single_pass()
+        if merged == 0:
+            break
+        total_merged += merged
+
+    print(f"angepasste lines (gesamt): {total_merged}")
 
 
 ###LV-lines
@@ -655,21 +795,37 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         n.buses.at[row["bus_id"], "household_count"] = row["household_count"]
         n.buses.at[row["bus_id"], "trafo_cap"] = row["s_nom"]
         n.buses.at[row["bus_id"], "geom"] = row["geometry"]
+        
+    mask_mv = n.buses.comp_type == "MV_Muffe"
+    n.buses.loc[mask_mv, "v_nom"] = 20
+    n.buses.loc[~mask_mv, "v_nom"] = 0.4
+    
 
     #### ------- add lines to network ------###
     # prepare KDTree
-    bus_coords = np.array(
-        [[geom.centroid.x, geom.centroid.y] for geom in buses.geometry]
+    lv_buses = buses[~buses.comp_type.isin(["MV_Muffe"])]
+    lv_coords = np.array(
+        [[geom.centroid.x, geom.centroid.y] for geom in lv_buses.geometry]
     )
-    bus_tree = cKDTree(bus_coords)
+    lv_tree = cKDTree(lv_coords)
 
     # trafo / distributor set + KDTree
     traf_buses = buses[buses.comp_type.isin(["distributor", "trafo"])]
-
+    
     traf_coords = np.array(
         [[geom.centroid.x, geom.centroid.y] for geom in traf_buses.geometry]
     )
     traf_tree = cKDTree(traf_coords)
+    
+    #mv_buses (mv_joints) set
+    mv_buses = buses[
+    buses.comp_type.isin(["MV_Muffe", "trafo", "distributor", "trafo_HV"])
+      ]
+      
+    mv_coords = np.array(
+        [[geom.centroid.x, geom.centroid.y] for geom in mv_buses.geometry]
+    )
+    mv_tree = cKDTree(mv_coords)
 
     def process_line(row):
         line_id = row["line_id"]
@@ -679,12 +835,19 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
 
         comp_type = row["comp_type"]
         cable_type = row["KABELTYP"]
+        
+        if comp_type == "mv_line":
+              buses_use = mv_buses
+              tree_use = mv_tree
+        else:
+              buses_use = lv_buses
+              tree_use = lv_tree
 
         # nearest bus to line_start
-        bus0, dist0 = get_nearest_bus_robust(start_point, buses, tree=bus_tree)
+        bus0, dist0 = get_nearest_bus_robust(start_point, buses_use, tree=tree_use)
 
         # nearest bus to line_end
-        bus1, dist1 = get_nearest_bus_robust(end_point, buses, tree=bus_tree)
+        bus1, dist1 = get_nearest_bus_robust(end_point, buses_use, tree=tree_use)
 
         # ---- Starting point ----
         if 10 > dist0 > 0.1:
@@ -694,19 +857,12 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
             if traf_dist < 10:
                 bus0, dist0 = traf_bus, traf_dist
             else:
-                if comp_type != "mv_line":
-                    bus0, dist0 = get_nearest_bus_robust(
-                        start_point, buses, tree=bus_tree
+                bus0, dist0 = get_nearest_bus_robust(
+                        start_point, buses_use, tree=tree_use
                     )
-                    print(
+                print(
                         f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
                     )
-                else:
-                    print(
-                        f"MV_Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
-                    )
-                    return None  # signal -> skip
-
         elif dist0 >= 10:
             print(
                 f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
@@ -721,19 +877,12 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
             if traf_dist < 10:
                 bus1, dist1 = traf_bus, traf_dist
             else:
-                if comp_type != "mv_line":
-                    bus1, dist1 = get_nearest_bus_robust(
-                        end_point, buses, tree=bus_tree
+                bus1, dist1 = get_nearest_bus_robust(
+                        end_point, buses_use, tree=tree_use
                     )
-                    print(
+                print(
                         f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
                     )
-                else:
-                    print(
-                        f"MV_Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
-                    )
-                    return None  # skip
-
         elif dist1 >= 10:
             print(
                 f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
@@ -763,8 +912,8 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
                 / 1e6
             )
         else:
-            r = 0.3
-            x = 0.05
+            r = 0.3 * length_km
+            x = 0.05* length_km
             s_nom = 1
 
         capital_costs = 100000  # ToDo: adjust default values!!!
@@ -834,11 +983,8 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         results_df[["line_id", "bus0", "bus1"]], on="line_id", how="left"
     )
 
-    ### ---- add transformator to network (connect an generator at each trafo for test reasons -----###
+    ### ---- add transformator to network (connect an generator at each hv trafo for test reasons -----###
     trafo_buses = n.buses[n.buses.comp_type.str.contains("trafo")]
-    n.buses = n.buses.drop(
-        "trafo_cap", axis="columns"
-    )  # trafo_cap column isn't used anymore
     for idx, bus in trafo_buses.iterrows():
         comp = bus.comp_type
         if bus.comp_type =='trafo':
@@ -847,13 +993,14 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
               s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
         else: 
               bus1 = f"{bus.name}_MV"
-              bus0 = f"{bus.name}_HV"  # Same bus for MV level
+              bus0 = f"{bus.name}_HV"  # Same bus for HV level
               s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 63
+
               ### to add both MV- and HV-bus to network
               n.add(
                   "Bus",
                   name=bus1,
-                  v_nom=110,
+                  v_nom=20,
                   carrier="AC",
                   household_count=bus.household_count,
                   x=bus.x,
@@ -861,7 +1008,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
                   geom=bus.geom,
                   comp_type=comp,
               )
-              
+              '''
               n.add(
                   "Generator",
                   name=f"gen_{idx}",
@@ -872,7 +1019,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
                   #p_nom_extendable =True,
               )
               
-
+              '''
         n.add(
             "Bus",
             name=bus0,
@@ -936,7 +1083,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
     ]
     for c in carriers:
         n.add("Carrier", c)
-
+    
     return buses, lines
 
 
@@ -952,41 +1099,49 @@ def open_LV_circle(n, lv_line_idx):
 
 def implement_switches_LV(n, input_path):
     try:
-        lines_with_switches = gpd.read_file(input_path)
+        switches = gpd.read_file(input_path)
     except Exception as e:
-        print(f"Not possible to read switches Input file {input_path}: {e}")
+        print(f"Fehler: {e}")
         return n
 
-    open_lines_geoms = lines_with_switches["geometry"].tolist()
+    # 1. n.lines temporär in GeoDataFrame umwandeln
+    # Wichtig: 'geom' (oder 'geometry') muss die Geometrie-Objekte enthalten
+    gdf_lines = gpd.GeoDataFrame(n.lines, geometry='geom', crs=switches.crs)
 
-    if not open_lines_geoms:
-        print(
-            "Keine offenen (zu löschenden) Leitungsgeometrien in der Shapefile gefunden. Netzwerk bleibt unverändert."
-        )
-        return n
+    # 2. Räumliche Suche: Finde Indizes der Linien, die am nächsten an den Switches liegen
+    # max_distance fängt Rundungsfehler ab (z.B. 0.001 Meter)
+    # 1. Erstelle Punkte, die in der Mitte jeder Schalter-Leitung liegen
+    if switches.crs != gdf_lines.crs:
+        switches = switches.to_crs(gdf_lines.crs)
 
-    mask = n.lines.geom.apply(
-        lambda g: any(g.equals(o) for o in open_lines_geoms)
+    # 2. Erstelle einen winzigen Puffer um die Schalter (z.B. 2cm)
+    # Das macht aus der Linie eine schmale Fläche
+    switches_buffered = switches.copy()
+    switches_buffered['geometry'] = switches.geometry.buffer(0.02) 
+
+    # 3. Räumlicher Join: Welche Leitung liegt INNERHALB dieses Puffers?
+    # 'within' stellt sicher, dass die Leitung fast komplett im Puffer liegen muss
+    matches = gpd.sjoin(
+        gpd.GeoDataFrame(n.lines, geometry='geom', crs=switches.crs),
+        switches_buffered,
+        predicate='within',
+        how='inner'
     )
-    # deleted_lines = n.lines[mask]
-    # print(f"This lines are deleted:{deleted_lines.index.tolist()}")
+    indices_to_drop = matches.index.unique()
 
-    initial_line_count = len(n.lines)
-    n.lines = n.lines[~n.lines.geom.isin(open_lines_geoms)]
+    if not indices_to_drop.empty:
+        print(f"Lösche {len(indices_to_drop)} Linien mit Indizes: {indices_to_drop.tolist()}")
+        n.lines = n.lines.drop(indices_to_drop)
+    else:
+        print("Keine passenden Geometrien zum Löschen gefunden.")
 
-    lines_deleted = initial_line_count - len(n.lines)
-
-    print(
-        f"Switches implemented. {lines_deleted} lines were deleted due to open switches."
-    )
-    print(f"Remaining lines: {len(n.lines)}.")
-
-    n = fix_grid_infrastructure(n)
-
+    n = fix_grid_infrastructure(n) 
     return n
 
 
-def fix_grid_infrastructure(n, min_size=2500):
+
+def fix_grid_infrastructure(n):
+
     # Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
     if not loop_lines.empty:
@@ -1058,54 +1213,78 @@ def fix_grid_infrastructure(n, min_size=2500):
 
                 n.remove(comp, to_remove)
 
-    # Erkenne Subnetzwerke
     G = n.graph()
     components = list(nx.connected_components(G))
-
-    for comp in components:
-        if len(comp) < min_size:
-            print(
-                f"⚠️ Small subnetwork with {len(comp)} Buses found: {sorted(list(comp))[:5]} ..."
-            )
-            # Lösche alle Busse im Subnetz
+      
+    # 2. Die Komponenten nach Größe sortieren (absteigend)
+    # Das größte Subnetz steht danach an Index 0
+    components = sorted(components, key=len, reverse=True)
+      
+    if components:
+        main_component = components[0]
+        subnetworks_to_remove = components[1:] # Alles außer dem Größten
+      
+        print(f"✅ Main Subnetwork found: {len(main_component)} Buses.")
+          
+        # 3. Alle kleineren Subnetze entfernen
+        for comp in subnetworks_to_remove:
+            print(f"⚠️ Removing subnetwork with {len(comp)} Buses...")
+              
+            # In PyPSA reicht es oft, die Busse zu löschen; 
+            # n.mremove entfernt effizienter als eine Schleife
+              
+            # Erst Busse löschen
             n.remove("Bus", list(comp))
-            # Lösche alle Komponenten, die an diesen Bussen hängen
-            for comp_name in [
-                "Generator",
-                "Transformer",
-                "Load",
-                "StorageUnit",
-                "Link",
-                "Line",
-            ]:
-                df = n.df(comp_name)
-                if comp_name in ["Transformer", "Link", "Line"]:
-                    to_remove = df[
-                        df.bus0.isin(comp) | df.bus1.isin(comp)
-                    ].index.tolist()
-                else:
-                    to_remove = df[df.bus.isin(comp)].index.tolist()
-                if to_remove:
-                    print(
-                        f"⚠️ Remove {len(to_remove)} {comp_name}(s) inside of the subnetwork"
-                    )
-                    n.remove(comp_name, to_remove)
-        else:
-            print(
-                f"⚠️ Main Subnetwork with {len(comp)} Buses found – will be maintained. Example buses:{sorted(list(comp))[:5]}"
-            )
-
+              
+            # Dann alle assoziierten Komponenten
+            for c in n.iterate_components(list(n.all_components - {"Bus"})):
+                  df = c.df
+                  if "bus" in df.columns:
+                      to_remove = df[df.bus.isin(comp)].index
+                  elif "bus0" in df.columns: # Für Lines, Links, Transformers
+                      to_remove = df[df.bus0.isin(comp) | df.bus1.isin(comp)].index
+                  else:
+                      continue
+                      
+                  if not to_remove.empty:
+                      n.remove(c.name, to_remove.tolist())
+    else:
+          print("❌ No components found in network.")
+      
     print("Infrastructure of network is fixed.")
 
     return n
 
 
-def import_ev_chargers(n):
+def export_shape_files_from_network(n, output_path):
+      buses_path = os.path.join(output_path, "buses_final.shp")
+      buses = n.buses.copy()
 
-    # use shapefile for ladesäulen
-    return
+      buses["geometry"] = [
+            Point(xy) for xy in zip(buses["x"], buses["y"])
+            ]
 
-
+      gdf_buses = gpd.GeoDataFrame(
+          buses,
+          geometry="geometry",
+          crs="EPSG:32632"  
+      )  
+      
+      gdf_buses.to_file(buses_path)
+      
+      lines_path = os.path.join(output_path, "lines_final.shp")
+      lines = n.lines.copy()
+      
+      gdf_lines = gpd.GeoDataFrame(
+          lines,
+          geometry="geom",
+          crs="EPSG:32632"
+      )
+      gdf_lines.to_file(lines_path)
+      
+      
+      
+      
 def create_pypsa_network(
     shape_files_folder,
     q_households_folder,
@@ -1153,19 +1332,21 @@ def create_pypsa_network(
         f"{len(n.lines)} lines"
     )
 
-    if export_shape_files:
-        print("=== [7/10] Exporting grid shapefiles ===")
-        os.makedirs("results", exist_ok=True)
-        buses = buses.drop(columns=["geometry"])
-        buses.to_file("results/grid_buses.shp")
-        lines.to_file("results/grid_lines.shp")
-        print("    -> Shapefiles written to ./results")
-
-    print("=== [8/10] Implementing LV switches ===")
+    print("=== [7/10] Implementing LV switches ===")
     n = implement_switches_LV(n, switches_folder)
 
-    print("=== [9/10] Fixing grid infrastructure ===")
+    print("=== [8/10] Fixing grid infrastructure ===")
     fix_grid_infrastructure(n)
+    
+    print("=== [9/10] Merge lines, just seperated by unused bus ===")
+    #merge_lines_splitted_by_bus(n)
+    
+    if export_shape_files:
+        print("=== [10/10] Exporting grid shapefiles ===")
+        os.makedirs("results", exist_ok=True)
+        export_shape_files_from_network(n, "./results")
+        print("    -> Shapefiles written to ./results")
+    
 
     print("=== Network creation finished successfully ===")
 
