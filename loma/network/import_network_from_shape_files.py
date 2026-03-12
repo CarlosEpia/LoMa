@@ -1297,7 +1297,9 @@ def create_pypsa_network(
 ):
     print("=== [1/10] Initializing PyPSA network ===")
     n = pypsa.Network()
-    n.to_crs(32632)
+    if n.c.shapes.static.crs is not None:
+        n.c.shapes.static.set_crs(32632, allow_override=True, inplace=True)
+    n.srid = 32632
 
     time_index = pd.date_range("2023-01-01", periods=8760, freq="h")
     n.snapshots = time_index
