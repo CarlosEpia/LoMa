@@ -6,26 +6,25 @@ Created on Thu Jun 19 15:11:55 2025
 @author: student
 """
 
-from loma.demands.create_household_distribution import create_household_dist
-from loma.demands.create_industrial_demand import (
-    insert_ind_demand_per_building,
-)
-from loma.demands.cts_demands import inser_cts_demand_per_building
-from loma.demands.import_household_demand import distribute_household_demand
-from loma.network.import_network_from_shape_files import create_pypsa_network
-from loma.network.correct_meshed_grid import avoid_meshes_in_network
-from loma.demands.import_EV_demand import import_EV_loads
-from loma.demands.import_EV_demand import import_EV_demands
-from loma.demands.import_hp_demand import add_heat_loads_to_network
-from loma.network.flexibilities_14a_heat_pump import (
-    insert_heat_pump_flexibilities_14a,
-)
+from datetime import datetime
+
 from loma.constraints.constraints import load_reduction_constraint_14a
-from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
-    insert_pv_rooftop_and_battery,
-)
-from loma.pypsa_model_into_ding0_shape import prepare_ding0_shape_export
+from loma.demands.create_household_distribution import create_household_dist
+from loma.demands.create_industrial_demand import \
+    insert_ind_demand_per_building
+from loma.demands.cts_demands import inser_cts_demand_per_building
+from loma.demands.import_EV_demand import import_EV_demands, import_EV_loads
+from loma.demands.import_household_demand import distribute_household_demand
+from loma.demands.import_hp_demand import add_heat_loads_to_network
+from loma.network.correct_meshed_grid import avoid_meshes_in_network
+from loma.network.flexibilities_14a_heat_pump import \
+    insert_heat_pump_flexibilities_14a
+from loma.network.import_network_from_shape_files import create_pypsa_network
 from loma.plot_results import plot_results
+from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import \
+    insert_pv_rooftop_and_battery
+from loma.pypsa_model_into_ding0_shape import (add_dummy_mv_grid,
+                                               prepare_ding0_shape_export)
 
 args = {
     "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V3",  # define path of shapefiles for grid infrastructure (related to execution folder)
@@ -112,25 +111,28 @@ n = import_EV_demands(n)
 # insert heat pump flexibilities
 # n = insert_heat_pump_flexibilities_14a(n)
 
+# Manual fixes: To Do
+n.lines.s_nom_extendable = False
+n.transformers.s_nom_extendable = False
+n.generators.control = "PQ"
 
-from datetime import datetime
+if len(n.buses) < 1000:
+    n = add_dummy_mv_grid(n)
+
+n.consistency_check()
 
 print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
 # Optimize
 n.optimize(
-    snapshots=n.snapshots[12:13],
+    snapshots=n.snapshots[0:1],
     solver_name="highs",
     solver_options={
-        "BarConvTol": 1.0e-5,
-        "FeasibilityTol": 1.0e-5,
-        "method": 2,
-        "crossover": 0,
-        "logFile": "solver_etrago.log",
         "threads": 4,
-        "BarHomogeneous": 1,
+
     },
 )
+
+#n.pf(snapshots=n.snapshots[0:1])
 
 print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
