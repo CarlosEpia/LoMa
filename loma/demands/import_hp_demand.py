@@ -9,6 +9,7 @@ import os
 import pandas as pd
 import geopandas as gpd
 import numpy as np
+import logging
 
 from loma.demands.household_count import parse_bus_numbers
 
@@ -66,7 +67,7 @@ def check_heat_pumps(n):
     return n
 
 
-def add_heat_loads_to_network(n):
+def add_heat_loads_to_network(n, scenario):
     """
     Adds heat loads to a PyPSA network if bus.HP == 1.
     Load profiles are calculated based on census cells, daily profiles,
@@ -108,25 +109,54 @@ def add_heat_loads_to_network(n):
     )
 
     # Relevant buses with Heat_pump
-    buses_with_hp = n.buses[n.buses.HP == 1].copy()
-    bus_gdf = gpd.GeoDataFrame(
-        buses_with_hp,
-        geometry=gpd.points_from_xy(buses_with_hp.x, buses_with_hp.y),
+    potential_buses = n.buses[
+          n.buses.comp_type == 'house_connection'
+    ].copy()
+
+    potential_gdf = gpd.GeoDataFrame(
+        potential_buses,
+        geometry=gpd.points_from_xy(potential_buses.x, potential_buses.y),
         crs=census_cells.crs,
     )
+    # spartial joint for potential buses and heat_demand cells
+    mapped_buses = gpd.sjoin_nearest(potential_gdf, heat_demand_cells, how="left")
+    mapped_buses = mapped_buses[~mapped_buses.index.duplicated(keep="first")]
 
-    # Spatial mapping: Bus → Census cell
-    bus_with_cell = gpd.sjoin_nearest(bus_gdf, heat_demand_cells, how="left")
-    bus_with_cell = bus_with_cell[
-        ~bus_with_cell.index.duplicated(keep="first")
+    # just keep buses with a zensus_poplulation_id for avoiding errors
+    valid_zensus_ids = daily_profiles["zensus_population_id"].unique()
+    mapped_buses = mapped_buses[
+        (mapped_buses["zensus_pop"].isin(valid_zensus_ids)) & 
+        (mapped_buses["demand"].notna())
     ]
 
-    # Save original left-index (these are the bus IDs/labels from the network)
-    left_bus_ids = list(bus_with_cell.index)
+    # Filter buses with Heatpump 
+    bus_with_hp = mapped_buses[mapped_buses.HP == 1].copy()
+    
+    # scenario targets 
+    target_hp_counts = {
+        "Husum_statusQuo": 575,
+        "Husum_2035": 2600,
+    }
+    
+    target_count = target_hp_counts.get(scenario, len(bus_with_hp))
+    current_count = len(bus_with_hp)
 
-    # Reset index to get a simple RangeIndex for iteration and for load_profiles columns
-    bus_with_cell = bus_with_cell.reset_index(drop=True)
-
+    if target_count < current_count:
+        # Fall 1: Weniger HPs -> Zufällig aus dem HP=1 Set wählen
+        logging.info(f"Reduce HPs from {current_count} to {target_count}")
+        bus_with_cell = bus_with_hp.sample(n=target_count, random_state=42)
+        
+    elif target_count > current_count:
+        # Fall 2: Mehr HPs -> HP=1 behalten + Rest aus anderen house_connections auffüllen
+        logging.info(f"Increase HPs from {current_count} to {target_count}")
+        n_extra = target_count - current_count
+        
+        # Verfügbare Busse sind alle house_connection, die NOCH KEINE HP haben
+        available_buses = mapped_buses.loc[~mapped_buses.index.isin(bus_with_hp.index)]
+        extra_samples = available_buses.sample(n=n_extra, replace=False, random_state=42)
+            
+        bus_with_cell = pd.concat([bus_with_hp, extra_samples])
+    
     # Initialize load time series
     snapshots = n.snapshots
     n_hours = len(snapshots)
@@ -142,7 +172,7 @@ def add_heat_loads_to_network(n):
     used_profiles = {}
     for bus_idx, row in bus_with_cell.iterrows():
         try:
-            bus_id = left_bus_ids[bus_idx]
+            bus_id = bus_idx
         except IndexError:
             # Sicherheitsnetz: falls Mapping aus irgendeinem Grund nicht passt
             print(
@@ -201,6 +231,8 @@ def add_heat_loads_to_network(n):
         cop_air = calculate_cop_air(temp_air["TT_TU"])
         elec_profile = hourly_profile / cop_air
         
+        
+        
         if (
             elec_profile.max() < 0.0005
         ):  # ToDo: Discuss if adjustemnt of value is necessary
@@ -209,7 +241,7 @@ def add_heat_loads_to_network(n):
         # Write into matrix
         elec_profile.index = load_profiles.index
         load_profiles.loc[:, bus_idx] = elec_profile[:n_hours]
-
+        
         # Add load to the network
         n.add(
             "Load",

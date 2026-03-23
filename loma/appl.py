@@ -43,7 +43,7 @@ from datetime import datetime
 
 args = {
     "import_network_structure": False,  # "/home/carlos/LoMa/network_structures/MGB",
-    "scenario": "Husum_2035",  # Husum_2035 or Husum_statusQuo
+    "scenario": "Husum_statusQuo",  # Husum_2035 or Husum_statusQuo
     "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V3",  # define path of shapefiles for grid infrastructure (related to execution folder)
     "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
     "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
@@ -129,7 +129,7 @@ else:
     )
 
     # insert_heat_loas_for_heat_pump_location
-    n = add_heat_loads_to_network(n)
+    n = add_heat_loads_to_network(n, args["scenario"])
 
 
 # insert EV_loads
