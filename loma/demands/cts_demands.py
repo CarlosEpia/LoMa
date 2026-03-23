@@ -2,6 +2,7 @@ import ast
 
 import geopandas as gpd
 import pandas as pd
+import numpy as np
 
 
 def load_cts_demand_per_building(shape):
@@ -32,7 +33,7 @@ def load_cts_demand_per_building(shape):
     return building_share[["p_set", "geom"]]
 
 
-def assign_cts_demand_to_buses(network, cts_demands):
+def assign_cts_demand_to_buses(network, cts_demands, target_demand):
     buses = network.buses.copy()
     buses = buses[buses["comp_type"] == "house_connection"]
     buses = gpd.GeoDataFrame(buses, geometry="geom", crs=32632)
@@ -62,6 +63,10 @@ def assign_cts_demand_to_buses(network, cts_demands):
     cts_demands.set_index("Load", drop=True, inplace=True)
 
     cts_demands_t = cts_demands["p_set"].copy()
+    
+    #scale demand down according to expected value
+    scale_factor= target_demand/cts_demands_t.apply(lambda x: np.max(x)).sum()  
+    cts_demands_t = cts_demands_t.apply(lambda x: np.array(x) * scale_factor)
 
     cts_demands["carrier"] = "conventional_load"
     cts_demands["sign"] = -1
@@ -77,13 +82,16 @@ def assign_cts_demand_to_buses(network, cts_demands):
             ],
         ]
     )
-    for l in cts_demands_t.index:
-        network.loads_t.p_set[l] = cts_demands_t[l]
-        
-        #secure that no household demand is implemented at same bus
-        bus_name = cts_demands.loc[l, "bus"]
-        if "household_count" in network.buses.columns:
-            network.buses.loc[bus_name, "household_count"] = 0
+    #implement timeseries für cts loads
+    ts_df = pd.DataFrame(cts_demands_t.tolist(), index=cts_demands_t.index).T
+    ts_df.index = network.loads_t.p_set.index
+    network.loads_t.p_set = pd.concat([network.loads_t.p_set, ts_df], axis=1)
+
+    # Remove household demand at same buses
+    if "household_count" in network.buses.columns:
+        affected_buses = cts_demands["bus"].unique()
+        network.buses.loc[affected_buses, "household_count"] = 0
+
 
     print("""
           ✅ CTS loads are succesfully imported.
@@ -91,10 +99,10 @@ def assign_cts_demand_to_buses(network, cts_demands):
     return network
 
 
-def inser_cts_demand_per_building(network, shape_path):
+def inser_cts_demand_per_building(network, shape_path, target_demand=31):
     # breakpoint()
     shape = gpd.read_file(shape_path)
     cts_demands = load_cts_demand_per_building(shape)
-    network = assign_cts_demand_to_buses(network, cts_demands)
+    network = assign_cts_demand_to_buses(network, cts_demands, target_demand)
 
     return network
