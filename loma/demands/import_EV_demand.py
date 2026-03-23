@@ -5,6 +5,8 @@ import os
 import re
 from collections import defaultdict
 
+import random
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely.strtree import STRtree
@@ -13,6 +15,7 @@ from shapely.strtree import STRtree
 def import_charging_points(
     n,
     input_folder,
+    scenario,
     *,
     export_bus_shapefile=False,
     export_debug_csv=False,
@@ -254,9 +257,13 @@ def import_charging_points(
     buses_with_charging = set()
     charging_load_names = set()
     debug_rows = []
+    existing_buses_with_ev = set()
+    capacity_pool = []
 
+    # Add existing EV loads
     for idx, ev in EV_locations.iterrows():
         loads_kw, src = parse_charger_loads(ev)
+        capacity_pool.extend(loads_kw)
         kw_ref = max(loads_kw) if loads_kw else 11.0
 
         if kw_ref > MV_THRESHOLD_KW:
@@ -318,7 +325,8 @@ def import_charging_points(
 
             created_load_names.append(load_name)
             charging_load_names.add(load_name)
-
+            existing_buses_with_ev.add(bus_name)
+            
         if export_debug_csv:
             debug_rows.append({
                 "feature_idx": idx,
@@ -335,7 +343,56 @@ def import_charging_points(
                 "n_loads": len(loads_kw),
                 "created_load_names": "|".join(created_load_names),
             })
+            
+    #### Adjust amount of heat_pumps due to scenario selection
+    con_buses = n.buses[n.buses.comp_type == "house_connection"].copy()       
 
+    # scenario targets 
+    target_ev_counts = {
+       "Husum_statusQuo": 412,
+       "Husum_2035": 1000,
+    } 
+    if scenario not in target_ev_counts:
+        raise ValueError(f"Unknown scenario {scenario}")
+    target_count = target_ev_counts[scenario]
+    
+    # scaling factor for MGB_Model 
+    scaling_factor = len(con_buses) / 9599 # 9599 is the amount of buses for house_connection_busses in whole Husum
+    target_count = int(target_count * scaling_factor)
+    
+    # Determine how many additional EVs are needed
+    current_count = len(EV_locations)
+    remaining_count = target_count - current_count
+
+    if remaining_count > 0:
+        # candidate buses without EV
+        candidate_buses = [b for b in con_buses.index if b not in existing_buses_with_ev]
+
+        if len(candidate_buses) < remaining_count:
+            print(f"Warning: Not enough buses without EV to reach target. Only {len(candidate_buses)} new EVs will be added.")
+            remaining_count = len(candidate_buses)
+            
+        # pool of existing kW values for random selection
+        kw_pool = capacity_pool
+        if not kw_pool:
+            kw_pool = [11.0]  # fallback
+            
+        random.seed(42)  # for reproducibility
+        # randomly assign new EV loads
+        for bus_name in random.sample(candidate_buses, remaining_count):
+            bus_load_counter[bus_name] += 1
+            counter = bus_load_counter[bus_name]
+            kW = random.choice(kw_pool)
+            p_set = kW / 1000.0
+
+            load_name = f"Additional_Charging_Point_{bus_name}_{counter}"
+            n.add(
+                "Load",
+                load_name,
+                bus=bus_name,
+                p_set=p_set,
+                carrier="charging_point",
+            )
     if export_bus_shapefile:
         export_buses_with_charging(
             house_buses=house_buses,
@@ -376,7 +433,6 @@ def import_charging_points(
             )
         except Exception as e:
             print(f"Error saving charging point profiles: {e}")
-
     return n
 
 
