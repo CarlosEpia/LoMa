@@ -138,7 +138,12 @@ def add_heat_loads_to_network(n, scenario):
         "Husum_2035": 2600,
     }
     
-    target_count = target_hp_counts.get(scenario, len(bus_with_hp))
+    if scenario not in target_hp_counts:
+        raise ValueError(f"Unknown scenario {scenario}")
+    target_count = target_hp_counts[scenario]
+    # scaling factor for MGB_Model 
+    scaling_factor = len(potential_buses) / 9599 # 9599 is the amount of buses for house_connection_busses in whole Husum
+    target_count = int(target_count * scaling_factor)
     current_count = len(bus_with_hp)
 
     if target_count < current_count:
