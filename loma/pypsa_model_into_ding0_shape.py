@@ -65,7 +65,6 @@ def add_dummy_mv_grid(n):
 
     # new trafo connection to HV-level
     hv_bus_name = "HV_dummy_bus"
-    """
     n.add("Bus",
           name=hv_bus_name,
           v_nom=110,
@@ -73,7 +72,6 @@ def add_dummy_mv_grid(n):
           y=y_existing + 0.1,
           carrier="AC",
           overwrite=True)
-    """
     # New Genertaor 
     n.add("Generator",
           name="HV_dummy_gen_slack",
@@ -334,7 +332,5 @@ def export_timeseries(n, export_path):
 
 
 def prepare_ding0_shape_export(n, export_path):
-    if len(n.buses)<1000:
-          n = add_dummy_mv_grid(n)
     adjust_network_shape(n, export_path)
     export_timeseries(n, export_path)
