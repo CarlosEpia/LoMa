@@ -14,9 +14,10 @@ from loma.demands.create_industrial_demand import (
     insert_ind_demand_per_building,
 )
 from loma.demands.cts_demands import inser_cts_demand_per_building
-from loma.demands.import_EV_demand import import_EV_demands, import_EV_loads
 from loma.demands.import_household_demand import distribute_household_demand
+from loma.demands.import_EV_demand import import_charging_points
 from loma.demands.import_hp_demand import add_heat_loads_to_network
+
 from loma.network.correct_meshed_grid import avoid_meshes_in_network
 from loma.network.flexibilities_14a_heat_pump import (
     insert_heat_pump_flexibilities_14a,
@@ -121,8 +122,7 @@ else:
     n = add_heat_loads_to_network(n)
 
 # insert EV_loads
-n = import_EV_loads(n, args["path_to_shapefiles_grid"])
-n = import_EV_demands(n)
+n = import_charging_points(n, args["path_to_shapefiles_grid"])
 
 # insert heat pump flexibilities
 # n = insert_heat_pump_flexibilities_14a(n)

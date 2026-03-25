@@ -166,7 +166,18 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     loads = pd.DataFrame(index=n.loads.index)
     loads["name"] = loads.index
     loads["bus"] = n.loads.bus
-    loads["p_set"] = n.loads_t.p_set.max()
+    #loads["p_set"] = n.loads_t.p_set.max()
+    
+    # Start with static p_set from n.loads (MW) or charging points
+    loads["p_set"] = n.loads["p_set"].astype(float)
+
+    # If time series exist, overwrite with max(timeseries) for matching loads
+    ts = getattr(getattr(n, "loads_t", None), "p_set", None)
+    if ts is not None and not ts.empty:
+        common_cols = [c for c in loads.index if c in ts.columns]
+        if common_cols:
+            loads.loc[common_cols, "p_set"] = ts[common_cols].max(axis=0)
+            
     loads["building_id"] = None
     loads["type"] = n.loads.carrier
     loads["annual_consumption"] = None
@@ -271,24 +282,43 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
     )
 
 
-###export load_timeseries
 def export_timeseries(n, export_path):
-
     export_path = os.path.join(export_path, "timeseries")
     os.makedirs(export_path, exist_ok=True)
 
+    # Start with existing load timeseries if available
+    ts = getattr(getattr(n, "loads_t", None), "p_set", None)
+
+    if ts is not None and not ts.empty:
+        loads_ts = ts.copy()
+    else:
+        loads_ts = pd.DataFrame(index=n.snapshots)
+
+    # Add flat fallback profiles for the CP loads missing in loads_t.p_set
+    missing_cols = [c for c in n.loads.index if c not in loads_ts.columns]
+    if missing_cols:
+        flat_df = pd.DataFrame(
+            index=n.snapshots,
+            data={col: float(n.loads.at[col, "p_set"]) for col in missing_cols},
+        )
+        loads_ts = pd.concat([loads_ts, flat_df], axis=1)
+
+    # Keep column order aligned with n.loads
+    loads_ts = loads_ts.reindex(columns=n.loads.index)
+
     # export load_timeseries
-    loads_ts = n.loads_t.p_set
     loads_ts.index.name = "snapshot"
     loads_ts.to_csv(
-        os.path.join(export_path, "load_timeseries.csv"), index=True
+        os.path.join(export_path, "load_timeseries.csv"),
+        index=True,
     )
 
     # export p_max_pu for load_shedding_gens
     gens_ts = n.generators_t.p_max_pu
     gens_ts.index.name = "snapshot"
     gens_ts.to_csv(
-        os.path.join(export_path, "gen_p_max_pu_timeseries.csv"), index=True
+        os.path.join(export_path, "gen_p_max_pu_timeseries.csv"),
+        index=True,
     )
     
     #export cop timeseries for edisgo usage
