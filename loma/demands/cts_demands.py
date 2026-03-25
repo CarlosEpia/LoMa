@@ -44,6 +44,12 @@ def assign_cts_demand_to_buses(network, cts_demands, target_demand):
         cts_demands, buses, "left", distance_col="distance"
     )
     cts_demands = cts_demands[cts_demands["distance"] < 150]
+    
+    if cts_demands.empty:
+          print("""
+                ⚠️ No CTS loads found within 150m of any bus. Skipping CTS import.
+                """)
+          return network
 
     # ######## ONLY FOR VALIDATION PURPOSES ###############
 
