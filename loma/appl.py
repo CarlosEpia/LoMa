@@ -34,9 +34,16 @@ from loma.pypsa_model_into_ding0_shape import (
 import pypsa
 from shapely import wkt
 
+from loma.pypsa_model_into_ding0_shape import (
+    add_dummy_mv_grid,
+    prepare_ding0_shape_export,
+)
+
+from datetime import datetime
+
 args = {
     "import_network_structure": False,  # "/home/carlos/LoMa/network_structures/MGB",
-    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V3",  # define path of shapefiles for grid infrastructure (related to execution folder)
+    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid",  # define path of shapefiles for grid infrastructure (related to execution folder)
     "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
     "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
     "path_to_household_data": "data/Input_files/all_streets_household_count.csv",
@@ -124,9 +131,6 @@ else:
 # insert EV_loads
 n = import_charging_points(n, args["path_to_shapefiles_grid"])
 
-# insert heat pump flexibilities
-# n = insert_heat_pump_flexibilities_14a(n)
-
 # Manual fixes: To Do
 n.lines.s_nom_extendable = False
 n.transformers.s_nom_extendable = False
@@ -134,25 +138,27 @@ n.generators.control = "PQ"
 
 if len(n.buses) < 1000:
     n = add_dummy_mv_grid(n)
+else:
+    n.add("Generator",
+          name="HV_dummy_gen_slack",
+          bus="bus_20111_HV",
+          p_nom=10000,
+          carrier="AC",
+          control='Slack',
+          marginal_cost=50)
+    n.buses.at["bus_20111_HV", "control"] = "Slack"
 
 n.consistency_check()
 
 print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 # Optimize
-n.optimize(
-    snapshots=n.snapshots[0:1],
-    solver_name="highs",
-    solver_options={
-        "threads": 4,
-    },
-)
-
-# n.pf(snapshots=n.snapshots[0:1])
-
+# n.optimize(
+#     snapshots=n.snapshots[0:1],
+#     solver_name="highs",
+#     solver_options={
+#         "threads": 4,
+#     },
+# )
 print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-# plot_results(n)
-
-# export model into ding0_shape ####
-#### define own export_folder in arguments of the functions
-prepare_ding0_shape_export(n, "./results/MGB_Husum_model")
+n.export_to_csv_folder("results/MGB_model_pypsa")
