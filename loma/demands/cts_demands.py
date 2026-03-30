@@ -71,8 +71,20 @@ def assign_cts_demand_to_buses(network, cts_demands, target_demand):
     cts_demands_t = cts_demands["p_set"].copy()
     
     #scale demand down according to expected value
-    scale_factor= target_demand/cts_demands_t.apply(lambda x: np.max(x)).sum()  
-    cts_demands_t = cts_demands_t.apply(lambda x: np.array(x) * scale_factor)
+    peak_loads = cts_demands_t.apply(np.max)
+    delete_count=0
+    while peak_loads.sum() > target_demand:
+        worst = peak_loads.idxmax()
+        peak_loads.drop(worst, inplace=True)
+        cts_demands_t.drop(worst, inplace=True)
+        cts_demands.drop(worst, inplace=True)
+        delete_count += 1
+      
+    if cts_demands_t.empty:
+        print("⚠️ All CTS loads removed to meet target demand. Skipping CTS import.")
+        return network
+    else:
+        print(f"⚠️ {delete_count} CTS loads removed to meet target demand.")
 
     cts_demands["carrier"] = "conventional_load"
     cts_demands["sign"] = -1

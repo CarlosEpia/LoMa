@@ -170,84 +170,78 @@ def add_heat_loads_to_network(n, scenario):
         0.0, index=snapshots, columns=bus_with_cell.index
     )
 
-    # avg heat-demand for calculating a scaling_factor for areas with really low heat_demand due to old census-data
-    avg_hp_capcity = 0.0122  # acccording to "Technology Assessment Report - e-HIGHWAY 2050 , Technofi, 2015"
-
-    # Create a profile for each bus
+    #source : "Branchenstudie 2023: Marktentwicklung – Prognose – Handlungsempfehlungen" - Bundesverband Wärmepumpe (BWP) e. V, 2023 
+    # prognosed avg. heatpump capacity 10 MW for 2030
+    HP_CAPACITY_MIN_MW = 0.005   # thermische Lesitung
+    HP_CAPACITY_MAX_MW = 0.015   # thermisceh Leistung
+      
+    # Reproduzierbarer RNG – Seed einmal pro Simulation setzen
+    rng = np.random.default_rng(seed=42)
+      
+    # --- Profil-Schleife ---
     used_profiles = {}
+    scale_up_count = 0
+    scale_down_count = 0
     for bus_idx, row in bus_with_cell.iterrows():
         try:
             bus_id = bus_idx
         except IndexError:
-            # Sicherheitsnetz: falls Mapping aus irgendeinem Grund nicht passt
-            print(
-                f"IndexError: Kein bus_id für Spalte {bus_idx}; überspringe."
-            )
+            print(f"IndexError: Kein bus_id für Spalte {bus_idx}; überspringe.")
             continue
-
-        zensus_id = row["zensus_pop"]
+      
+        zensus_id   = row["zensus_pop"]
         annual_demand = row["demand"]
         if pd.isna(annual_demand) or pd.isna(zensus_id):
-            continue
-
-        # Daily profiles for this cell
+              continue
+      
         daily_candidates = daily_profiles.loc[
             daily_profiles["zensus_population_id"] == zensus_id
         ]
         if daily_candidates.empty:
             continue
-
-        # Number of profiles (original buildings) in the cell
+      
         n_profiles = len(daily_candidates)
-
-        # If cell not used yet → start at 0
+      
         if zensus_id not in used_profiles:
             used_profiles[zensus_id] = 0
-
-        # Determine profile index (modulo for looping through)
+      
         profile_idx = used_profiles[zensus_id] % n_profiles
         daily = daily_candidates.iloc[profile_idx]
         used_profiles[zensus_id] += 1
-
-        # Yearly scaling factor (same for all if only one column)
+      
         climate_factor = yearly_profiles["daily_demand_share"].values
-
-        # IDPs: selected daily IDs for this year (365 IDs)
         idp_ids = daily["selected_idp_profiles"]
-
-        # Create 8760h profile
+      
         hourly_profile = []
         for day, idp_id in enumerate(idp_ids):
-            idp = np.array(idp_pool.loc[idp_id, "idp"])  # 24 values
-            day_share = climate_factor[day]  # Daily factor from yearly profile
-            # Normalize by the number of profiles per cell
-            hourly_profile.extend(
-                idp * day_share * (annual_demand / n_profiles)
-            )
-
+            idp       = np.array(idp_pool.loc[idp_id, "idp"])
+            day_share = climate_factor[day]
+            hourly_profile.extend(idp * day_share * (annual_demand / n_profiles))
         hourly_profile = np.array(hourly_profile)
-        # Normalize to annual demand (optional, in case of rounding errors)
-        # hourly_profile *= annual_demand / hourly_profile.sum()
-
-        # Transform heat load into electrical load
+      
+        # Thermisch → elektrisch via COP
         temp_air = pd.read_csv(
-            "data/data_bundle/wetterdaten_2011_Luft.csv"
+              "data/data_bundle/wetterdaten_2011_Luft.csv"
         ).set_index("MESS_DATUM")
         cop_air = calculate_cop_air(temp_air["TT_TU"])
         elec_profile = hourly_profile / cop_air
-        
-        
-        
-        if (
-            elec_profile.max() < 0.0005
-        ):  # ToDo: Discuss if adjustemnt of value is necessary
-            scaling_factor = avg_hp_capcity / cop_air / elec_profile.max()
+      
+        thermal_peak = hourly_profile.max()  # Thermischer Spitzenwert in MW
+      
+        if thermal_peak < 0.001 or thermal_peak > 0.05:   #to avoid extrem high and low profiles due to 
+            hp_capacity_target = rng.uniform(HP_CAPACITY_MIN_MW, HP_CAPACITY_MAX_MW)
+            scaling_factor = hp_capacity_target / cop_air / elec_profile.max()
             elec_profile = elec_profile * scaling_factor
-        # Write into matrix
+      
+            if thermal_peak < 0.001:
+                scale_up_count += 1
+            else:
+                scale_down_count += 1 
+      
+        # In Lastmatrix schreiben
         elec_profile.index = load_profiles.index
         load_profiles.loc[:, bus_idx] = elec_profile[:n_hours]
-        
-        # Add load to the network
+      
         n.add(
             "Load",
             name=f"heat_load_{bus_id}",
@@ -255,7 +249,13 @@ def add_heat_loads_to_network(n, scenario):
             carrier="heat_pump",
             p_set=load_profiles[bus_idx],
         )
-
+        
+    print(
+        f"In total {scale_up_count + scale_down_count} profiles were scaled "
+        f"({scale_up_count} scaled up due to too low peak demand, "
+        f"{scale_down_count} scaled down due to too high peak demand)"
+    )
+    
     return n
 
 
