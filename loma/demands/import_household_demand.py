@@ -52,7 +52,7 @@ def distribute_household_demand(n, profile_dist, random_seed=42):
     # Define available profile types
     profil_types = ['SR', 'SO', 'SK', 'PR', 'PO', 'OR', 'OO', 'P1', 'P2', 'P3']
     # Define time index for one year with hourly resolution
-    time_index = pd.date_range('2023-01-01', periods=8760, freq='h')
+    time_index = n.snapshots
 
     # Dictionary to collect all load time series before concatenation
     new_profiles = {}
