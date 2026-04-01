@@ -133,7 +133,7 @@ else:
 
 
 # insert EV_loads
-n = import_charging_points(n, args["path_to_shapefiles_grid"])
+n = import_charging_points(n, args["path_to_shapefiles_grid"], args['scenario'])
 
 # Manual fixes: To Do
 n.lines.s_nom_extendable = False
