@@ -361,7 +361,7 @@ def import_charging_points(
     target_count = int(target_count * scaling_factor)
     
     # Determine how many additional EVs are needed
-    current_count = len(EV_locations)
+    current_count = len(n.loads[n.loads.carrier=='charging_point'])
     remaining_count = target_count - current_count
 
     if remaining_count > 0:
