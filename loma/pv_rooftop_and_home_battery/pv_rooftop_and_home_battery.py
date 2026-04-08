@@ -86,8 +86,6 @@ def insert_home_battery(network, shape, buses, batteries_path):
     bat["carrier"] = "home_battery"
     bat["sign"] = 1
     bat["max_hours"] = bat["capacity"] / bat["p_nom"]
-    bat["control"] = "PQ"
-    bat["p_nom_extendable"] = False
 
     for name, row in bat.iterrows():
         network.add(
@@ -97,6 +95,8 @@ def insert_home_battery(network, shape, buses, batteries_path):
             carrier=row["carrier"],
             p_nom=float(row["p_nom"]),
             max_hours=float(row["max_hours"]),
+            control="PQ",
+            p_nom_extendable = False
         )
 
     return network
