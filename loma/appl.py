@@ -39,7 +39,6 @@ from loma.pypsa_model_into_ding0_shape import (
     prepare_ding0_shape_export,
 )
 
-from datetime import datetime
 
 args = {
     "import_network_structure": False,  # "/home/carlos/LoMa/network_structures/MGB",
