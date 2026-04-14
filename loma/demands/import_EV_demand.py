@@ -44,8 +44,12 @@ def import_charging_points(
         os.path.join(input_folder, "Gis ST Ladesäule Position.shp")
     ).to_crs("EPSG:32632")
 
+    # get house_connection buses
     house_buses = n.buses[n.buses.comp_type == "house_connection"].copy()
-    trafo_buses = n.buses[n.buses.comp_type == "trafo"].copy()
+    
+    # get MV side (bus0) of the trafo buses
+    mv_busses = n.transformers["bus0"].unique()
+    trafo_buses = n.buses.loc[n.buses.index.intersection(mv_busses)].copy()
 
     MAX_ASSIGN_DIST_LV = 100.0   # m
     MAX_ASSIGN_DIST_MV = 300.0   # m
@@ -259,7 +263,7 @@ def import_charging_points(
         loads_kw, src = parse_charger_loads(ev)
         kw_ref = max(loads_kw) if loads_kw else 11.0
 
-        if kw_ref > MV_THRESHOLD_KW:
+        if kw_ref >= MV_THRESHOLD_KW:
             target_gdf = trafo_buses_gdf
             target_tree = trafo_tree
             max_dist = MAX_ASSIGN_DIST_MV
