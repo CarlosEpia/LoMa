@@ -42,7 +42,8 @@ from loma.pypsa_model_into_ding0_shape import (
 
 args = {
     "import_network_structure": False,  # "/home/carlos/LoMa/network_structures/MGB",
-    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid",  # define path of shapefiles for grid infrastructure (related to execution folder)
+    "scenario": "Husum_2035",  # Husum_2035 or Husum_statusQuo
+    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V3",  # define path of shapefiles for grid infrastructure (related to execution folder)
     "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
     "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
     "path_to_household_data": "data/Input_files/all_streets_household_count.csv",
@@ -80,6 +81,7 @@ args = {
 # household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
 household_dist_df = create_household_dist(args["path_to_shapefile_MV_grid"])
 
+
 if args["import_network_structure"]:
     n = pypsa.Network()
     if n.c.shapes.static.crs is not None:
@@ -92,6 +94,7 @@ if args["import_network_structure"]:
 else:
     # create pypsa network with grid topology shapefiles
     n = create_pypsa_network(
+        args["scenario"],
         args["path_to_shapefiles_grid"],
         args["path_to_household_data"],
         args["path_to_heat_pump_data"],
@@ -111,6 +114,7 @@ else:
         args["pv_rooftop_path"],
         args["pv_feedin_path"],
         args["batteries_path"],
+        args["scenario"]
     )
 
     # allocate profiles to buses
@@ -125,10 +129,11 @@ else:
     )
 
     # insert_heat_loas_for_heat_pump_location
-    n = add_heat_loads_to_network(n)
+    n = add_heat_loads_to_network(n, args["scenario"])
+
 
 # insert EV_loads
-n = import_charging_points(n, args["path_to_shapefiles_grid"])
+n = import_charging_points(n, args["path_to_shapefiles_grid"], args['scenario'])
 
 # Manual fixes: To Do
 n.lines.s_nom_extendable = False

@@ -162,7 +162,7 @@ def create_gdf_from_shape(input_folder):
     )
     lines["line_id"] = [f"line_{i}" for i in range(len(lines))]
     lines = lines.reset_index(drop=True)
-
+    
     return buses, lines
 
 #not used currently
@@ -1286,6 +1286,7 @@ def export_shape_files_from_network(n, output_path):
       
       
 def create_pypsa_network(
+    scenario,
     shape_files_folder,
     q_households_folder,
     heat_pump_folder,
@@ -1300,8 +1301,11 @@ def create_pypsa_network(
     if n.c.shapes.static.crs is not None:
         n.c.shapes.static.set_crs(32632, allow_override=True, inplace=True)
     n.srid = 32632
-
-    time_index = pd.date_range("2023-01-01", periods=8760, freq="h")
+    
+    if scenario == 'Husum_2035':
+          time_index = pd.date_range("2035-01-01", periods=8760, freq="h")
+    else:
+          time_index = pd.date_range("2025-01-01", periods=8760, freq="h")
     n.snapshots = time_index
     print(f"    -> Snapshots set: {len(time_index)} hours")
 
