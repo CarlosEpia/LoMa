@@ -97,6 +97,19 @@ def distribute_household_demand(n, profile_dist, random_seed=42):
 
     return n
 
+def define_slp_as_load_profile(n):
+    hourly_profile = pd.read_csv("data/data_bundle/SLP_hourly.csv", index_col=0)
+    slp_normed = hourly_profile/hourly_profile.sum()
+    slp = slp_normed["load"]  # Series statt DataFrame
+    slp.index = n.loads_t.p_set.index 
+    
+    annual_sums = n.loads_t.p_set.sum()
+    new_loads = slp.values.reshape(-1, 1) * annual_sums.values.reshape(1, -1)
+
+    # Schritt 4: neues DataFrame erstellen
+    n.loads_t.p_set = pd.DataFrame(new_loads, index=slp.index, columns=n.loads_t.p_set.columns)
+    
+    return n 
 
 
 
