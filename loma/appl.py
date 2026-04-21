@@ -165,4 +165,6 @@ print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 # )
 print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-n.export_to_csv_folder("results/MGB_model_pypsa")
+#n.export_to_csv_folder("results/MGB_model_pypsa")
+n.export_to_csv_folder("results/Whole_Husum_model_pypsa")
+

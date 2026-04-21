@@ -348,7 +348,7 @@ def import_charging_points(
                 "created_load_names": "|".join(created_load_names),
             })
             
-    #### Adjust amount of heat_pumps due to scenario selection
+    #### Adjust amount of charging_points due to scenario selection
     con_buses = n.buses[n.buses.comp_type == "house_connection"].copy()       
 
     # scenario targets 
@@ -369,25 +369,34 @@ def import_charging_points(
     remaining_count = target_count - current_count
 
     if remaining_count > 0:
-        # candidate buses without EV
-        candidate_buses = [b for b in con_buses.index if b not in existing_buses_with_ev]
-
-        if len(candidate_buses) < remaining_count:
-            print(f"Warning: Not enough buses without EV to reach target. Only {len(candidate_buses)} new EVs will be added.")
-            remaining_count = len(candidate_buses)
-            
         # pool of existing kW values for random selection
-        kw_pool = capacity_pool
-        if not kw_pool:
-            kw_pool = [11.0]  # fallback
-            
+        kw_pool = capacity_pool if capacity_pool else [11.0]
+
         random.seed(42)  # for reproducibility
-        # randomly assign new EV loads
-        for bus_name in random.sample(candidate_buses, remaining_count):
-            bus_load_counter[bus_name] += 1
-            counter = bus_load_counter[bus_name]
+
+        used_additional_buses = set()
+
+        for _ in range(remaining_count):
             kW = random.choice(kw_pool)
             p_set = kW / 1000.0
+
+            # choose target voltage level based on threshold
+            if kW >= MV_THRESHOLD_KW:
+                candidate_pool = [b for b in trafo_buses.index if b not in used_additional_buses]
+                level = "MV"
+            else:
+                candidate_pool = [b for b in con_buses.index if b not in existing_buses_with_ev and b not in used_additional_buses]
+                level = "LV"
+
+            if not candidate_pool:
+                print(f"Warning: No remaining {level} candidate buses for additional charging point with {kW} kW.")
+                continue
+
+            bus_name = random.choice(candidate_pool)
+            used_additional_buses.add(bus_name)
+
+            bus_load_counter[bus_name] += 1
+            counter = bus_load_counter[bus_name]
 
             load_name = f"Additional_Charging_Point_{bus_name}_{counter}"
             n.add(
@@ -397,6 +406,10 @@ def import_charging_points(
                 p_set=p_set,
                 carrier="charging_point",
             )
+
+            charging_load_names.add(load_name)
+            buses_with_charging.add(bus_name)
+            
     if export_bus_shapefile:
         export_buses_with_charging(
             house_buses=house_buses,
