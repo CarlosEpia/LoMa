@@ -81,7 +81,6 @@ args = {
 # household-type distribution on 100x100m             ###ToDo: combine create_household_dist and distribute_household_demand
 household_dist_df = create_household_dist(args["path_to_shapefile_MV_grid"])
 
-
 if args["import_network_structure"]:
     n = pypsa.Network()
     if n.c.shapes.static.crs is not None:
@@ -131,7 +130,6 @@ else:
     # insert_heat_loas_for_heat_pump_location
     n = add_heat_loads_to_network(n, args["scenario"])
 
-
 # insert EV_loads
 n = import_charging_points(n, args["path_to_shapefiles_grid"], args['scenario'])
 
@@ -167,4 +165,3 @@ print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 #n.export_to_csv_folder("results/MGB_model_pypsa")
 n.export_to_csv_folder("results/Whole_Husum_model_pypsa")
-

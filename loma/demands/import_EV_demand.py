@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely.strtree import STRtree
+import logging
 
 
 def import_charging_points(
@@ -263,6 +264,9 @@ def import_charging_points(
     debug_rows = []
     existing_buses_with_ev = set()
     capacity_pool = []
+    
+    existing_created = 0
+    existing_skipped = 0
 
     # Add existing EV loads
     for idx, ev in EV_locations.iterrows():
@@ -287,11 +291,13 @@ def import_charging_points(
         dist = ev.geometry.distance(bus_geom)
 
         if dist > max_dist:
-            print(
-                f"SKIPPED EV ({level}): no bus within {max_dist:.0f} m "
-                f"(nearest = {dist:.1f} m)"
-            )
-
+            # print(
+            #     f"SKIPPED EV ({level}): no bus within {max_dist:.0f} m "
+            #     f"(nearest = {dist:.1f} m)"
+            # )
+            
+            existing_skipped += 1
+            
             if export_debug_csv:
                 debug_rows.append({
                     "feature_idx": idx,
@@ -326,11 +332,13 @@ def import_charging_points(
                 p_set=p_set,
                 carrier="charging_point",
             )
-
+            
+            existing_created += 1
+            
             created_load_names.append(load_name)
             charging_load_names.add(load_name)
             existing_buses_with_ev.add(bus_name)
-            
+        
         if export_debug_csv:
             debug_rows.append({
                 "feature_idx": idx,
@@ -347,6 +355,12 @@ def import_charging_points(
                 "n_loads": len(loads_kw),
                 "created_load_names": "|".join(created_load_names),
             })
+
+    logging.info(
+        "Existing charging points imported: Created Loads=%s, skipped locations that were too far away=%s",
+        existing_created,
+        existing_skipped,
+    )
             
     #### Adjust amount of charging_points due to scenario selection
     con_buses = n.buses[n.buses.comp_type == "house_connection"].copy()       
@@ -369,12 +383,33 @@ def import_charging_points(
     remaining_count = target_count - current_count
 
     if remaining_count > 0:
+        logging.info(
+            "Increase charging points from %s to %s",
+            current_count,
+            target_count,
+        )
+    elif remaining_count == 0:
+        logging.info(
+            "Charging points already match target: %s",
+            target_count,
+        )
+    else:
+        logging.info(
+            "Charging points already exceed target: current=%s, target=%s",
+            current_count,
+            target_count,
+        )
+    
+    if remaining_count > 0:
         # pool of existing kW values for random selection
         kw_pool = capacity_pool if capacity_pool else [11.0]
 
         random.seed(42)  # for reproducibility
 
         used_additional_buses = set()
+        
+        added_lv = 0
+        added_mv = 0
 
         for _ in range(remaining_count):
             kW = random.choice(kw_pool)
@@ -389,7 +424,11 @@ def import_charging_points(
                 level = "LV"
 
             if not candidate_pool:
-                print(f"Warning: No remaining {level} candidate buses for additional charging point with {kW} kW.")
+                logging.warning(
+                    "No remaining %s candidate buses for additional charging point with %.1f kW",
+                    level,
+                    kW,
+                )
                 continue
 
             bus_name = random.choice(candidate_pool)
@@ -406,10 +445,22 @@ def import_charging_points(
                 p_set=p_set,
                 carrier="charging_point",
             )
-
+            
+            if level == "LV":
+                added_lv += 1
+            else:
+                added_mv += 1
+                
             charging_load_names.add(load_name)
             buses_with_charging.add(bus_name)
             
+        logging.info(
+            "Charging point addition summary: Added=%s, LV=%s, MV=%s",
+            added_lv + added_mv,
+            added_lv,
+            added_mv,
+        )
+        
     if export_bus_shapefile:
         export_buses_with_charging(
             house_buses=house_buses,
