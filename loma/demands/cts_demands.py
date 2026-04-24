@@ -69,6 +69,7 @@ def assign_cts_demand_to_buses(network, cts_demands, target_demand):
     cts_demands.set_index("Load", drop=True, inplace=True)
 
     cts_demands_t = cts_demands["p_set"].copy()
+
     
     #scale demand down according to expected value
     peak_loads = cts_demands_t.apply(np.max)
@@ -102,6 +103,8 @@ def assign_cts_demand_to_buses(network, cts_demands, target_demand):
     )
     #implement timeseries für cts loads
     ts_df = pd.DataFrame(cts_demands_t.tolist(), index=cts_demands_t.index).T
+    #adjustment for saling cts demand down due to given values in "Regional-Szenarien"
+    ts_df = ts_df * 0.2
     ts_df.index = network.loads_t.p_set.index
     network.loads_t.p_set = pd.concat([network.loads_t.p_set, ts_df], axis=1)
 
