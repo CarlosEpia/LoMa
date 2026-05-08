@@ -896,25 +896,17 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         length_km = line_geom.length / 1000
 
         if cable_type in cable_types:
-            r = cable_types[cable_type]["R"] * length_km
-            x = (
-                cable_types[cable_type]["L"]
-                / 1000
-                * 50
-                * 2
-                * np.pi
-                * length_km
-            )
-            s_nom = (
-                cable_types[cable_type]["U"]
-                * cable_types[cable_type]["I_max"]
-                * np.sqrt(3)
-                / 1e6
-            )
+            params = cable_types[cable_type]
         else:
-            r = 0.3 * length_km
-            x = 0.05* length_km
-            s_nom = 1
+            # Fallback auf Default je nach Spannungsebene
+            if comp_type == "lv_line":
+                params = cable_types["Default_LV"]
+            else:
+                params = cable_types["Default_MV"]
+      
+        r = params["R"] * length_km
+        x = params["L"] / 1000 * 50 * 2 * np.pi * length_km
+        s_nom = params["U"] * params["I_max"] * np.sqrt(3) / 1e6
 
         capital_costs = 100000  # ToDo: adjust default values!!!
 
