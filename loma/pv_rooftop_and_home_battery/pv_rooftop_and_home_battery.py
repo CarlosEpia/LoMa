@@ -108,11 +108,21 @@ def insert_home_battery(network, shape, buses, batteries_path, scenario):
     )
     bat = bat[bat["distance"] <= 50]
 
+    # Filter batteries: only keep batteries at buses that have PV generators ()
+    pv_buses = set(network.generators[network.generators["carrier"] == "solar_rooftop"]["bus"].unique())
+    bat_before_filter = len(bat)
+    bat = bat[bat["bus"].isin(pv_buses)].copy()
+    logging.info(
+        f"Filtered batteries to only buses with PV generators: "
+        f"{bat_before_filter} batteries -> {len(bat)} batteries"
+    )
+
     #scale down amount of pvs according to scenario values
     target_capacities = {
         "Husum_statusQuo": 2.6,  # MW
         "Husum_2035": 7.5,
     } 
+
     if scenario not in target_capacities:
         logging.warning(
             f"Szenario '{scenario}' not found! "
