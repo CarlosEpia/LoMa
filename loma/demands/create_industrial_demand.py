@@ -45,8 +45,6 @@ def download_osm_industrial_areas(region_nuts3):
     return gdf[['osm_id', 'name', 'landuse', 'operator', 'substance', 'substation', 'area_ha', 'geometry']]
     
     
-
-
 def distribute_ind_demand(path_to_MV_district, region_nuts3):
     
     #load demand_regio data
@@ -123,15 +121,25 @@ def calc_load_curves_from_osm_demand(path_to_MV_district, region_nuts3):
     })
     
     return timeseries_final
-    
 
 def insert_ind_demand_per_building(n, path_to_MV_district, region_nuts3):
     """
     Connect industrial loads to the closest bus of the network 
-    (if distance is not to big)
+    (if distance is not too big).
+
+    Connection logic:
+      - Industrial loads <= 100 kW peak load:
+          use existing connection logic
+          house_connection or trafo bus inside polygon,
+          otherwise nearest such bus within 100 m
+
+      - Industrial loads > 100 kW peak load:
+          connect to closest trafo station
     """
+
+    MV_THRESHOLD_MW = 0.1  # 100 kW = 0.1 MW
     
-    #prepare timeseries
+    # prepare timeseries
     timeseries = calc_load_curves_from_osm_demand(path_to_MV_district, region_nuts3)
     timeseries_gdf = gpd.GeoDataFrame(timeseries, geometry="geometry", crs="EPSG:32632")
     
@@ -139,58 +147,100 @@ def insert_ind_demand_per_building(n, path_to_MV_district, region_nuts3):
     buses_gdf = gpd.GeoDataFrame(
         n.buses,
         geometry=gpd.points_from_xy(n.buses.x, n.buses.y),
-        crs="EPSG:32632" 
+        crs="EPSG:32632",
     )
-    con_buses_gdf = buses_gdf[buses_gdf.comp_type.isin(['house_connection', 'trafo'])]
-    
-    # connect each load to closest bus if distance < ....
+
+    # Existing candidate buses for small industrial loads
+    con_buses_gdf = buses_gdf[
+        buses_gdf.comp_type.isin(["house_connection", "trafo"])
+    ]
+
+    # Candidate buses for large industrial loads
+    # Prefer transformer MV-side buses, analogous to the EV logic.
+    if (
+        hasattr(n, "transformers")
+        and not n.transformers.empty
+        and "bus0" in n.transformers.columns
+    ):
+        trafo_bus_names = n.transformers["bus0"].dropna().unique()
+        trafo_buses_gdf = buses_gdf.loc[
+            buses_gdf.index.intersection(trafo_bus_names)
+        ].copy()
+    else:
+        trafo_buses_gdf = gpd.GeoDataFrame(
+            columns=buses_gdf.columns,
+            geometry="geometry",
+            crs="EPSG:32632",
+        )
+
+    # Fallback: use buses marked as trafo if transformer bus0 is not available
+    if trafo_buses_gdf.empty:
+        trafo_buses_gdf = buses_gdf[buses_gdf.comp_type == "trafo"].copy()
+
+    # connect each load to closest bus
     for _, row in timeseries_gdf.iterrows():
-        geom = row['geometry']
-        ts = row['timeseries']
+        geom = row["geometry"]
+        ts = row["timeseries"]
         polygon_centroid = geom.centroid
 
-        buses_in_polygon = con_buses_gdf[con_buses_gdf.geometry.within(geom)]       
-        if not buses_in_polygon.empty:
-            distances = buses_in_polygon.geometry.distance(polygon_centroid)
-            chosen_bus = distances.idxmin()  # Name des nächsten Busses
-        else:
-            distances = con_buses_gdf.geometry.distance(polygon_centroid)
-            nearest_buses = distances[distances < 100]
-            if not nearest_buses.empty:
-                chosen_bus = nearest_buses.idxmin()
+        peak_load_mw = pd.Series(ts).max()
+        peak_load_kw = peak_load_mw * 1000.0
+
+        chosen_bus = None
+
+        # Loads > 100 kW are connected to the closest trafo station
+        if peak_load_mw > MV_THRESHOLD_MW:
+            if not trafo_buses_gdf.empty:
+                distances = trafo_buses_gdf.geometry.distance(polygon_centroid)
+                chosen_bus = distances.idxmin()
             else:
-                chosen_bus = None
-                print(f"⚠️ No nearby bus found for connecting industrial load {row['osm_id']} (osm_id); ...skipped")
+                print(
+                    f"No trafo station found for industrial load {row['osm_id']} "
+                    f"with peak load {peak_load_kw:.2f} kW; ...skipped"
+                )
+
+        # Existing logic for loads <= 100 kW
+        else:
+            buses_in_polygon = con_buses_gdf[
+                con_buses_gdf.geometry.within(geom)
+            ]
+
+            if not buses_in_polygon.empty:
+                distances = buses_in_polygon.geometry.distance(polygon_centroid)
+                chosen_bus = distances.idxmin()
+            else:
+                distances = con_buses_gdf.geometry.distance(polygon_centroid)
+                nearest_buses = distances[distances < 100]
+
+                if not nearest_buses.empty:
+                    chosen_bus = nearest_buses.idxmin()
+                else:
+                    print(
+                        f"No nearby bus found for connecting industrial load "
+                        f"{row['osm_id']} (osm_id); ...skipped"
+                    )
 
         if chosen_bus is not None:
             load_name = f"Ind_Load_{chosen_bus}_{row['osm_id']}"
+
             n.add(
                 "Load",
                 name=load_name,
                 bus=chosen_bus,
                 carrier="conventional_load",
-                p_set=0.0
+                p_set=0.0,
             )
+
             n.loads_t.p_set[load_name] = pd.Series(ts, index=n.snapshots)
             
-            #secure that no household demand is connected to the same bus
+            # secure that no household demand is connected to the same bus
             if "household_count" in n.buses.columns:
                 n.buses.loc[chosen_bus, "household_count"] = 0
-                
-    print('''
-          ✅ Industrial loads are successfully imported
-          ''')
+   
+    print(
+        '''
+          Industrial loads are successfully imported
+          '''
+    )
             
     return n
-    
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    

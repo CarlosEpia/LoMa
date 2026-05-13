@@ -43,7 +43,7 @@ from loma.pypsa_model_into_ding0_shape import (
 
 args = {
     "import_network_structure": False,  # "/home/carlos/LoMa/network_structures/MGB",
-    "scenario": "Husum_statusQuo",  # Husum_2035 or Husum_statusQuo
+    "scenario": "Husum_2035",  # Husum_2035 or Husum_statusQuo
     "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V3",  # define path of shapefiles for grid infrastructure (related to execution folder)
     "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
     "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
@@ -115,7 +115,6 @@ else:
     #change profiles to SLP 
     n = define_slp_as_load_profile(n)
     
-
     # insert cts demand
     n = inser_cts_demand_per_building(n, args["path_to_shapefile_MV_grid"])
 
