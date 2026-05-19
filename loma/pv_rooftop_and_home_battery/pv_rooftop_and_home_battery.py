@@ -75,6 +75,7 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, sc
             bus=row["bus"],
             carrier=row["carrier"],
             p_nom=float(row["p_nom"]),
+            control="PQ",
             efficiency=float(row["efficiency"]),
         )
 

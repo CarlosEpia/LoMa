@@ -60,6 +60,7 @@ def add_dummy_mv_grid(n):
         s_nom=6.18342138302089,
         length=0.1,
         cable_type="NA2XS2Y 3x1x185 RM/25",
+        comp_type="mv_line",
         overwrite=True,
     )
 

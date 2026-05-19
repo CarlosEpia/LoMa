@@ -19,11 +19,12 @@ from shapely.geometry import LineString, Point
 from shapely.strtree import STRtree
 from shapely.ops import linemerge, unary_union
 import networkx as nx
+from collections import deque
 
 from loma.demands.import_hp_demand import check_heat_pumps
 from loma.demands.household_count import count_households_per_bus_input_file
 from loma.demands.household_count import count_households_per_bus_census_data
-
+from loma.pypsa_model_into_ding0_shape import add_dummy_mv_grid
 
 def create_gdf_from_shape(input_folder):
     """
@@ -1131,10 +1132,74 @@ def implement_switches_LV(n, input_path):
     return n
 
 
+def assign_lv_grid_ids(n):
+
+    # --- 1. LV-Busse & Trafos (identisch zu vorher) ---
+    lv_buses = set(n.buses[n.buses.v_nom == 0.4].index)
+
+    trafo_df  = n.transformers
+    lv_trafos = trafo_df[trafo_df.bus1.isin(lv_buses) | trafo_df.bus0.isin(lv_buses)]
+
+    def lv_side(row):
+        return row.bus1 if row.bus1 in lv_buses else row.bus0
+
+    trafo_lv_bus = {
+        trafo_id: lv_side(row)
+        for trafo_id, row in lv_trafos.iterrows()
+    }
+    trafo_to_grid_id = {tid: i + 1 for i, tid in enumerate(trafo_lv_bus)}
+
+    # --- 2. LV-Graph aufbauen ---
+    lv_lines = n.lines[
+        n.lines.bus0.isin(lv_buses) &
+        n.lines.bus1.isin(lv_buses)
+    ]
+    G = nx.Graph()
+    G.add_nodes_from(lv_buses)
+    for _, line in lv_lines.iterrows():
+        G.add_edge(line.bus0, line.bus1)
+
+    # --- 3. Multi-Source-BFS: alle Trafos gleichzeitig als Startpunkte ---
+    # Jeder Bus wird beim ERSTEN Erreichen einem Trafo zugeordnet → nächster Trafo
+    bus_to_grid_id = {}
+    queue = deque()
+
+    for trafo_id, t_bus in trafo_lv_bus.items():
+        if t_bus in G:
+            grid_id = trafo_to_grid_id[trafo_id]
+            bus_to_grid_id[t_bus] = grid_id
+            queue.append((t_bus, grid_id))
+
+    while queue:
+        current_bus, grid_id = queue.popleft()
+        for neighbor in G.neighbors(current_bus):
+            if neighbor not in bus_to_grid_id:          # noch nicht besucht
+                bus_to_grid_id[neighbor] = grid_id
+                queue.append((neighbor, grid_id))
+
+    # --- 4. Ins Netzwerk schreiben ---
+    n.buses["lv_grid_id"] = n.buses.index.map(bus_to_grid_id)
+
+    return n
+
 
 def fix_grid_infrastructure(n):
+      
+    ### Add slack Generator and dummy MV-grid (for test-case) for working lopf 
+    if len(n.buses) < 1000:
+        n = add_dummy_mv_grid(n)
+    else:
+        n.add("Generator",
+              name="HV_dummy_gen_slack",
+              bus="bus_20111_HV",
+              p_nom=10000,
+              carrier="AC",
+              control='Slack',
+              marginal_cost=50)
+        n.buses.at["bus_20111_HV", "control"] = "Slack"
+        
 
-    # Delete loop lines
+    ### Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
     if not loop_lines.empty:
         print("⚠️ Loop line IDs found:")
@@ -1208,7 +1273,7 @@ def fix_grid_infrastructure(n):
     G = n.graph()
     components = list(nx.connected_components(G))
       
-    # 2. Die Komponenten nach Größe sortieren (absteigend)
+    # Die Komponenten nach Größe sortieren (absteigend)
     # Das größte Subnetz steht danach an Index 0
     components = sorted(components, key=len, reverse=True)
       
@@ -1242,6 +1307,42 @@ def fix_grid_infrastructure(n):
                       n.remove(c.name, to_remove.tolist())
     else:
           print("❌ No components found in network.")
+    
+    # -------------------------------------------------------------------------
+    # Lösche Transformatoren ohne MV-Leitungsanbindung (inkl. Busse & Leitungen)
+    # ------------------------------------------------------------------------
+    mv_lines = n.lines[n.lines["comp_type"] == "mv_line"]
+    mv_line_buses = set(mv_lines["bus0"].tolist() + mv_lines["bus1"].tolist())
+
+    isolated_trafos = n.transformers[
+        ~n.transformers["bus0"].isin(mv_line_buses) &
+        ~n.transformers["bus1"].isin(mv_line_buses)
+    ]
+
+    if not isolated_trafos.empty:
+        # Busse die nur an diesen isolierten Trafos hängen
+        isolated_trafo_buses = set(
+            isolated_trafos["bus0"].tolist() + isolated_trafos["bus1"].tolist()
+        )
+        # Leitungen die an diesen Bussen hängen
+        isolated_lines = n.lines[
+            n.lines["bus0"].isin(isolated_trafo_buses) |
+            n.lines["bus1"].isin(isolated_trafo_buses)
+        ]
+
+        print(f"⚠️ Found {len(isolated_trafos)} transformer(s) without MV line connection:")
+        print(isolated_trafos[["bus0", "bus1"]].to_string())
+
+        if not isolated_lines.empty:
+            print(f"⚠️ Removing {len(isolated_lines)} associated line(s): {isolated_lines.index.tolist()}")
+            n.remove("Line", isolated_lines.index.tolist())
+
+        print(f"⚠️ Removing {len(isolated_trafos)} isolated transformer(s): {isolated_trafos.index.tolist()}")
+        n.remove("Transformer", isolated_trafos.index.tolist())
+
+        print(f"⚠️ Removing {len(isolated_trafo_buses)} associated bus(es): {list(isolated_trafo_buses)}")
+        n.remove("Bus", list(isolated_trafo_buses))
+    # -------------------------------------------------------------------------
       
     print("Infrastructure of network is fixed.")
 
@@ -1336,8 +1437,9 @@ def create_pypsa_network(
     print("=== [8/10] Fixing grid infrastructure ===")
     fix_grid_infrastructure(n)
     
-    print("=== [9/10] Merge lines, just seperated by unused bus ===")
+    print("=== [9/10] Assign LV grid IDs ===")
     #merge_lines_splitted_by_bus(n)
+    n = assign_lv_grid_ids(n)
     
     if export_shape_files:
         print("=== [10/10] Exporting grid shapefiles ===")

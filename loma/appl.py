@@ -29,7 +29,6 @@ from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
     insert_pv_rooftop_and_battery,
 )
 from loma.pypsa_model_into_ding0_shape import (
-    add_dummy_mv_grid,
     prepare_ding0_shape_export,
 )
 import pypsa
@@ -97,7 +96,7 @@ else:
     )
     
     # avoid meshes in the grid
-    # n = avoid_meshes_in_network(n)
+    #n = avoid_meshes_in_network(n)
 
     # insert solar_rooftop and home_batteries
     n = insert_pv_rooftop_and_battery(
@@ -132,19 +131,7 @@ n = import_charging_points(n, args["path_to_shapefiles_grid"], args['scenario'])
 # Manual fixes: To Do
 n.lines.s_nom_extendable = False
 n.transformers.s_nom_extendable = False
-n.generators.control = "PQ"
-
-if len(n.buses) < 1000:
-    n = add_dummy_mv_grid(n)
-else:
-    n.add("Generator",
-          name="HV_dummy_gen_slack",
-          bus="bus_20111_HV",
-          p_nom=10000,
-          carrier="AC",
-          control='Slack',
-          marginal_cost=50)
-    n.buses.at["bus_20111_HV", "control"] = "Slack"
+#n.generators.control = "PQ"
 
 n.consistency_check()
 
@@ -160,5 +147,5 @@ print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 #n.export_to_csv_folder("results/MGB_model_pypsa")
-n.export_to_csv_folder("results/Whole_Husum_model_pypsa")
+n.export_to_csv_folder("results/Whole_Husum_final_statusQuo_LV_ids")
 
