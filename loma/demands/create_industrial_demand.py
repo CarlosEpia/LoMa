@@ -193,6 +193,7 @@ def insert_ind_demand_per_building(n, path_to_MV_district, region_nuts3):
             if not trafo_buses_gdf.empty:
                 distances = trafo_buses_gdf.geometry.distance(polygon_centroid)
                 chosen_bus = distances.idxmin()
+                print(f"{row['osm_id']} connected to MV-grid")
             else:
                 print(
                     f"No trafo station found for industrial load {row['osm_id']} "
