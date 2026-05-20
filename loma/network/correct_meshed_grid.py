@@ -61,7 +61,8 @@ def analyze_lv_feeding_with_boundaries(n):
     g.add_edges_from(edges)
     
     # 2. Trafo-Busse als Startpunkte und Barrieren
-    trafo_lv_buses = set(n.transformers.bus1.unique())
+    lvmv_trafos= n.transformers[n.transformers.comp_type!='trafo_HV']
+    trafo_lv_buses = set(lvmv_trafos.bus1.unique())
     
     # Dictionary: Bus -> Liste der erreichten Trafos
     bus_feeding_map = {bus: set() for bus in n.buses.index}
