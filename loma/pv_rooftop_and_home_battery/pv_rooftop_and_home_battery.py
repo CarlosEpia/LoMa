@@ -120,7 +120,7 @@ def insert_home_battery(network, shape, buses, batteries_path, scenario):
 
     #scale down amount of pvs according to scenario values
     target_capacities = {
-        "Husum_statusQuo": 2.6,  # MW
+        "Husum_statusQuo": 2.6, #MW
         "Husum_2035": 7.5,
     } 
 
@@ -146,6 +146,9 @@ def insert_home_battery(network, shape, buses, batteries_path, scenario):
         bat = bat[bat["cumsum_p_nom"] <= target_p_nom].copy()
         
         logging.info(f"Home-batteries capacity reduction finished. Remaining batteries: {len(bat)}")
+        
+    if current_p_nom < target_p_nom: 
+        bat['p_nom'] *= target_p_nom/current_p_nom
 
     # insert data into network tables
     bat.rename(columns={"Bus": "bus"}, inplace=True)
