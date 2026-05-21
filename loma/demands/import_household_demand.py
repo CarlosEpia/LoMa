@@ -102,9 +102,10 @@ def define_slp_as_load_profile(n):
     slp_normed = hourly_profile/hourly_profile.sum()
     slp = slp_normed["load"]  # Series statt DataFrame
     slp.index = n.loads_t.p_set.index 
+    slp_shifted = pd.Series(np.roll(slp.values, 24), index=slp.index)
     
     annual_sums = n.loads_t.p_set.sum()
-    new_loads = slp.values.reshape(-1, 1) * annual_sums.values.reshape(1, -1)
+    new_loads = slp_shifted.values.reshape(-1, 1) * annual_sums.values.reshape(1, -1)
 
     # Schritt 4: neues DataFrame erstellen
     n.loads_t.p_set = pd.DataFrame(new_loads, index=slp.index, columns=n.loads_t.p_set.columns)
