@@ -157,7 +157,7 @@ def insert_home_battery(network, shape, buses, batteries_path, scenario):
 
     bat["carrier"] = "home_battery"
     bat["sign"] = 1
-    bat["max_hours"] = bat["capacity"] / bat["p_nom"]
+    bat["max_hours"] = 6
 
     for name, row in bat.iterrows():
         network.add(
