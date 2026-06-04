@@ -900,7 +900,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
             params = cable_types[cable_type]
         else:
             # Fallback auf Default je nach Spannungsebene
-            if comp_type == "lv_line":
+            if comp_type in ["lv_line", "hc_line"]:
                 params = cable_types["Default_LV"]
             else:
                 params = cable_types["Default_MV"]
