@@ -478,6 +478,7 @@ def impute_missing_hh_in_populated_cells(df_census_population_nuts3, df_census_h
         df_w_hh_pop = df_w_hh[df_w_hh['Einwohner'] == population_value]
         df_wo_hh_pop = df_wo_hh[df_wo_hh['Einwohner'] == population].copy()
 
+        np.random.seed(42)
         for index, row in df_wo_hh_pop.iterrows():
             # Select a random cell
             random_id = np.random.choice(df_w_hh_pop['GITTER_ID_100m'].unique())
