@@ -132,13 +132,15 @@ n = import_charging_points(n, args["path_to_shapefiles_grid"], args['scenario'])
 ####_______ Manual fixes: To Do ___________
 n.lines.s_nom_extendable = False
 n.transformers.s_nom_extendable = False
-#quick fix for critical line connectin industrial load Ind_Load_bus_26020_198593351 
-n.lines.loc['line_17084', 's_nom'] = 0.19
-#quick fix for critical line connecting multiple cts loads
-n.lines.loc['line_16014', 's_nom'] = 0.19 #(default value LV)
+
 if len(n.buses) < 1000: ##delete cts loads for MGB model
       loads_to_remove = n.loads.index[n.loads.index.str.contains("CTS")]  #
       n.remove("Load", loads_to_remove)
+else:
+    #quick fix for critical line connectin industrial load Ind_Load_bus_26020_198593351 
+    n.lines.loc['line_17084', 's_nom'] = 0.19
+    #quick fix for critical line connecting multiple cts loads
+    n.lines.loc['line_16014', 's_nom'] = 0.19 #(default value LV)
 ####__________________
 
 
