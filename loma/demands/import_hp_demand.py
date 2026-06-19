@@ -171,8 +171,8 @@ def add_heat_loads_to_network(n, scenario):
     )
 
     #source : "Branchenstudie 2023: Marktentwicklung – Prognose – Handlungsempfehlungen" - Bundesverband Wärmepumpe (BWP) e. V, 2023 
-    # prognosed avg. heatpump capacity 10 MW for 2030
-    HP_CAPACITY_MIN_MW = 0.005   # thermische Lesitung
+    # prognosed avg. heatpump capacity 10 kW for 2030
+    HP_CAPACITY_MIN_MW = 0.010   # thermische Lesitung
     HP_CAPACITY_MAX_MW = 0.015   # thermisceh Leistung
       
     # Reproduzierbarer RNG – Seed einmal pro Simulation setzen
@@ -228,7 +228,7 @@ def add_heat_loads_to_network(n, scenario):
       
         thermal_peak = hourly_profile.max()  # Thermischer Spitzenwert in MW
       
-        if thermal_peak < 0.001 or thermal_peak > 0.05:   #to avoid extrem high and low profiles due to 
+        if thermal_peak < 0.005 or thermal_peak > 0.05:   #to avoid extrem high and low profiles due to 
             hp_capacity_target = rng.uniform(HP_CAPACITY_MIN_MW, HP_CAPACITY_MAX_MW)
             scaling_factor = hp_capacity_target / cop_air / elec_profile.max()
             elec_profile = elec_profile * scaling_factor
