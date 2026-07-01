@@ -97,6 +97,7 @@ else:
         args["export_shape_files_grid"],
         args["switches_path"],
         household_dist_df,
+        project_config,
     )
     
     # avoid meshes in the grid

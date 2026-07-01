@@ -26,7 +26,7 @@ from loma.demands.household_count import count_households_per_bus_input_file
 from loma.demands.household_count import count_households_per_bus_census_data
 from loma.pypsa_model_into_ding0_shape import add_dummy_mv_grid
 
-def create_gdf_from_shape(input_folder):
+def create_gdf_from_shape(input_folder, project_config):
     """
     Creates GeoDataFrame for pypsa network components based on shapefiles
 
@@ -1090,7 +1090,7 @@ def open_LV_circle(n, lv_line_idx):
     return n
 
 
-def implement_switches_LV(n, input_path):
+def implement_switches_LV(n, input_path, project_config):
     try:
         switches = gpd.read_file(input_path)
     except Exception as e:
@@ -1128,7 +1128,7 @@ def implement_switches_LV(n, input_path):
     else:
         print("Keine passenden Geometrien zum Löschen gefunden.")
 
-    n = fix_grid_infrastructure(n) 
+    n = fix_grid_infrastructure(n, project_config)
     return n
 
 
@@ -1183,7 +1183,7 @@ def assign_lv_grid_ids(n):
     return n
 
 
-def fix_grid_infrastructure(n):
+def fix_grid_infrastructure(n, project_config):
       
     ### Add slack Generator and dummy MV-grid (for test-case) for working lopf 
     if len(n.buses) < 1000:
@@ -1388,6 +1388,7 @@ def create_pypsa_network(
     export_shape_files,
     switches_folder,
     census_data,
+    project_config,
 ):
     print("=== [1/10] Initializing PyPSA network ===")
     n = pypsa.Network()
@@ -1403,7 +1404,7 @@ def create_pypsa_network(
     print(f"    -> Snapshots set: {len(time_index)} hours")
 
     print("=== [2/10] Reading grid shape files ===")
-    buses, lines = create_gdf_from_shape(shape_files_folder)
+    buses, lines = create_gdf_from_shape(shape_files_folder, project_config)
     print(f"    -> Loaded {len(buses)} buses, {len(lines)} lines")
 
     print("=== [3/10] Snapping joint buses to lines ===")
@@ -1432,10 +1433,10 @@ def create_pypsa_network(
     )
 
     print("=== [7/10] Implementing LV switches ===")
-    n = implement_switches_LV(n, switches_folder)
+    n = implement_switches_LV(n, switches_folder, project_config)
 
     print("=== [8/10] Fixing grid infrastructure ===")
-    fix_grid_infrastructure(n)
+    fix_grid_infrastructure(n, project_config)
     
     print("=== [9/10] Assign LV grid IDs ===")
     #merge_lines_splitted_by_bus(n)
