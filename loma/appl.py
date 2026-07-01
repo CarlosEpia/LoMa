@@ -23,6 +23,7 @@ from loma.network.flexibilities_14a_heat_pump import (
     insert_heat_pump_flexibilities_14a,
 )
 from loma.network.load_cable_types import load_kabeltypen
+from loma.network.load_project_config import load_project_config
 from loma.network.import_network_from_shape_files import create_pypsa_network
 from loma.plot_results import plot_results
 from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
@@ -40,18 +41,21 @@ from loma.pypsa_model_into_ding0_shape import (
 )
 
 
+PROJECT_CONFIG_PATH = "data/Input_files/project_config_husum.yaml"
+project_config = load_project_config(PROJECT_CONFIG_PATH)
+
 args = {
     "import_network_structure": False,  # "/home/carlos/LoMa/network_structures/MGB",
-    "scenario": "Husum_statusQuo",  # Husum_2035 or Husum_statusQuo
-    "path_to_shapefiles_grid": "data/Input_files/shape_files_grid_V3",  # define path of shapefiles for grid infrastructure (related to execution folder)
-    "path_to_shapefile_MV_grid": "data/Input_files/MV_grid_district/husum_district.shp",  # define path of shapefiles for boundaries of husum_district
-    "nuts3_focus_region": "Nordfriesland, Schleswig-Holstein, Germany",
-    "path_to_household_data": "data/Input_files/all_streets_household_count.csv",
-    "path_to_heat_pump_data": "data/Input_files/heat_pumps.csv",
-    "batteries_path": "data/data_bundle/generators_and_batteries/batt_SH.geojson",
-    "pv_rooftop_path": "data/data_bundle/generators_and_batteries/rooftop_SH.geojson",
-    "pv_feedin_path": "data/data_bundle/generators_and_batteries/pv_feedin.csv",
-    "switches_path": "data/Input_files/switches_Husum.shp",
+    "scenario": project_config["project"]["scenario"],
+    "path_to_shapefiles_grid": project_config["paths"]["shapefiles_grid"],
+    "path_to_shapefile_MV_grid": project_config["paths"]["mv_grid_boundary"],
+    "nuts3_focus_region": project_config["nuts3_focus_region"],
+    "path_to_household_data": project_config["paths"]["household_data"],
+    "path_to_heat_pump_data": project_config["paths"]["heat_pump_data"],
+    "batteries_path": project_config["paths"]["batteries"],
+    "pv_rooftop_path": project_config["paths"]["pv_rooftop"],
+    "pv_feedin_path": project_config["paths"]["pv_feedin"],
+    "switches_path": project_config["paths"]["switches"],
     "use_census_household_data": True,
     "export_shape_files_grid": True,
     "Kabeltypen": { # U[V], I[A], R[Ohm/km], L[mH/km]
@@ -62,7 +66,7 @@ args = {
             "U": 20000, "I_max":500, "R": 0.2, "L": 0.3,
         },
     },
-    "path_to_cable_types": "data/Input_files/cable_types.yaml"
+    "path_to_cable_types": project_config["paths"]["cable_types"],
 }
 
 #add all cable_types to args
@@ -129,19 +133,12 @@ else:
 n = import_charging_points(n, args["path_to_shapefiles_grid"], args['scenario'])
 
 
-####_______ Manual fixes: To Do ___________
 n.lines.s_nom_extendable = False
 n.transformers.s_nom_extendable = False
 
-if len(n.buses) < 1000: ##delete cts loads for MGB model
+if project_config["project"]["is_test_model"]:  ##delete cts loads for test models
       loads_to_remove = n.loads.index[n.loads.index.str.contains("CTS")]  #
       n.remove("Load", loads_to_remove)
-else:
-    #quick fix for critical line connectin industrial load Ind_Load_bus_26020_198593351 
-    n.lines.loc['line_17084', 's_nom'] = 0.19
-    #quick fix for critical line connecting multiple cts loads
-    n.lines.loc['line_16014', 's_nom'] = 0.19 #(default value LV)
-####__________________
 
 
 n.consistency_check()
