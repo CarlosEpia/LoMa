@@ -47,48 +47,54 @@ def create_gdf_from_shape(input_folder, project_config):
             print(f"⚠️  File not found: {os.path.basename(path)} — skipping.")
             return gpd.GeoDataFrame()
 
+    gis_files = project_config["gis_source_files"]
+    gis_columns = project_config["gis_column_mapping"]
+    status_col = gis_columns["status_column"]
+    status_inactive_values = gis_columns["status_inactive_values"]
+    status_exclude_lighting_value = gis_columns["status_exclude_lighting_value"]
+
     # --- try reading all files (some might not exist) ---
     LV_lines = safe_read(
-        os.path.join(input_folder, "Gis NSP Kabelabschnitt Verlauf.shp")
+        os.path.join(input_folder, gis_files["lv_lines"])
     )
     MV_lines = safe_read(
-        os.path.join(input_folder, "Gis MSP Kabelabschnitt Verlauf.shp")
+        os.path.join(input_folder, gis_files["mv_lines"])
     )
     HA_lines = safe_read(
-        os.path.join(input_folder, "Gis NSP HA Abschnitt Verlauf.shp")
+        os.path.join(input_folder, gis_files["house_connection_lines"])
     )
     HA_Bus = safe_read(
-        os.path.join(input_folder, "Gis NSP HA Kasten Position.shp")
+        os.path.join(input_folder, gis_files["house_connection_boxes"])
     )
     distributors = safe_read(
-        os.path.join(input_folder, "Gis ST Kabelverteiler Position.shp")
+        os.path.join(input_folder, gis_files["distributors"])
     )
     joints_LV = safe_read(
-        os.path.join(input_folder, "Gis NSP Muffe Position.shp")
+        os.path.join(input_folder, gis_files["joints_lv"])
     )
     joints_MV = safe_read(
-        os.path.join(input_folder, "Gis MSP Muffe Position.shp")
+        os.path.join(input_folder, gis_files["joints_mv"])
     )
     if not joints_MV.empty:
           joints_MV = joints_MV.to_crs(joints_LV.crs) ##necessary for concat joints
           joints_MV['comp_type']= 'MV_Muffe'  # to distinguish MV Muffen from LV_Muffen for line splitting method
-    else: 
+    else:
           joints_LV['comp_type'] = None
     joints = pd.concat([joints_LV, joints_MV], ignore_index=True)
-    
+
     MVLV_trafos = safe_read(
-        os.path.join(input_folder, "Gis ST Station Fläche.shp")
+        os.path.join(input_folder, gis_files["mv_lv_stations"])
     )
 
     #delete lines which are "out of service"
-    LV_lines = LV_lines[~(LV_lines.STATUS.isin(['außer Betrieb', 'Vorverlegung', 'stillgelegt']))]
-    HA_lines = HA_lines[~(HA_lines.STATUS.isin(['außer Betrieb', 'Vorverlegung', 'stillgelegt']))]
-    if not MV_lines.empty: 
-          MV_lines = MV_lines[~(MV_lines.STATUS.isin(['außer Betrieb', 'stillgelegt', 'Vorverlegung']))]
-    
+    LV_lines = LV_lines[~(LV_lines[status_col].isin(status_inactive_values))]
+    HA_lines = HA_lines[~(HA_lines[status_col].isin(status_inactive_values))]
+    if not MV_lines.empty:
+          MV_lines = MV_lines[~(MV_lines[status_col].isin(status_inactive_values))]
+
     #delete ditributors with type 'Beleuchtung' (leads to wrong connnection in some cases)
-    distributors = distributors[distributors.STATUS!='Beleuchtung']
-    
+    distributors = distributors[distributors[status_col] != status_exclude_lighting_value]
+
     # rename columns to generalize the names
     for df in [HA_Bus, distributors, joints]:
         df.rename(
