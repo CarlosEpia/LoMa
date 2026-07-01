@@ -78,8 +78,9 @@ household_dist_df = create_household_dist(args["path_to_shapefile_MV_grid"])
 
 if args["import_network_structure"]:
     n = pypsa.Network()
+    epsg_code = int(str(project_config["project"]["crs"]).split(":")[-1])
     if n.c.shapes.static.crs is not None:
-        n.c.shapes.static.set_crs(32632, allow_override=True, inplace=True)
+        n.c.shapes.static.set_crs(epsg_code, allow_override=True, inplace=True)
     n.import_from_csv_folder(args["import_network_structure"])
     for df in [n.buses, n.lines, n.transformers]:
         if "geom" in df.columns and isinstance(df["geom"].iloc[0], str):

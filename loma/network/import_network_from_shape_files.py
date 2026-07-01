@@ -149,7 +149,7 @@ def create_gdf_from_shape(input_folder, project_config):
     HA_Bus_clean = ensure_columns(HA_Bus, bus_columns)
 
     # secure same crs
-    target_crs = "EPSG:32632"
+    target_crs = project_config["project"]["crs"]
     for gdf in [
         LV_lines,
         MV_lines,
@@ -1365,7 +1365,7 @@ def fix_grid_infrastructure(n, project_config):
     return n
 
 
-def export_shape_files_from_network(n, output_path):
+def export_shape_files_from_network(n, output_path, crs):
       buses_path = os.path.join(output_path, "buses_final.shp")
       buses = n.buses.copy()
 
@@ -1376,18 +1376,18 @@ def export_shape_files_from_network(n, output_path):
       gdf_buses = gpd.GeoDataFrame(
           buses,
           geometry="geometry",
-          crs="EPSG:32632"  
-      )  
-      
+          crs=crs
+      )
+
       gdf_buses.to_file(buses_path)
-      
+
       lines_path = os.path.join(output_path, "lines_final.shp")
       lines = n.lines.copy()
-      
+
       gdf_lines = gpd.GeoDataFrame(
           lines,
           geometry="geom",
-          crs="EPSG:32632"
+          crs=crs
       )
       gdf_lines.to_file(lines_path)
       
@@ -1407,11 +1407,13 @@ def create_pypsa_network(
     project_config,
 ):
     print("=== [1/10] Initializing PyPSA network ===")
+    crs = project_config["project"]["crs"]
+    epsg_code = int(str(crs).split(":")[-1])
     n = pypsa.Network()
     if n.c.shapes.static.crs is not None:
-        n.c.shapes.static.set_crs(32632, allow_override=True, inplace=True)
-    n.srid = 32632
-    
+        n.c.shapes.static.set_crs(epsg_code, allow_override=True, inplace=True)
+    n.srid = epsg_code
+
     if scenario == 'Husum_2035':
           time_index = pd.date_range("2035-01-01", periods=8760, freq="h")
     else:
@@ -1461,7 +1463,7 @@ def create_pypsa_network(
     if export_shape_files:
         print("=== [10/10] Exporting grid shapefiles ===")
         os.makedirs("results", exist_ok=True)
-        export_shape_files_from_network(n, "./results")
+        export_shape_files_from_network(n, "./results", crs)
         print("    -> Shapefiles written to ./results")
     
 
