@@ -95,32 +95,42 @@ def create_gdf_from_shape(input_folder, project_config):
     #delete ditributors with type 'Beleuchtung' (leads to wrong connnection in some cases)
     distributors = distributors[distributors[status_col] != status_exclude_lighting_value]
 
+    street_col = gis_columns["street_column"]
+    house_number_col = gis_columns["house_number_column"]
+    trafo_capacity_col = gis_columns["trafo_capacity_column"]
+    joint_type_col = gis_columns["joint_type_column"]
+    cable_type_col = gis_columns["cable_type_column"]
+    transformer_hv_marker_value = gis_columns["transformer_hv_marker_value"]
+
     # rename columns to generalize the names
     for df in [HA_Bus, distributors, joints]:
         df.rename(
-            columns={"LOKATION_S": "Straße", "HAUSNUMMER": "Hausnummer"},
+            columns={street_col: "Straße", house_number_col: "Hausnummer"},
             inplace=True,
         )
     for df in [MVLV_trafos]:
         df.rename(
             columns={
-                "LOKATION_S": "Straße",
-                "HAUSNUMMER": "Hausnummer",
-                "TRAFOBELAS": "s_nom",
+                street_col: "Straße",
+                house_number_col: "Hausnummer",
+                trafo_capacity_col: "s_nom",
             },
             inplace=True,
         )
-   
+    for df in [LV_lines, MV_lines, HA_lines]:
+        if not df.empty:
+            df.rename(columns={cable_type_col: "KABELTYP"}, inplace=True)
+
     # component-type-column for distinguish the components
     LV_lines["comp_type"] = "lv_line"
     if not MV_lines.empty:
         MV_lines["comp_type"] = "mv_line"
     HA_lines["comp_type"] = "hc_line"
     mask = joints["comp_type"].isna()
-    joints.loc[mask, "comp_type"] = joints.loc[mask, "ART"]  ##ToDo: Generalize for usage in other regions than husum
+    joints.loc[mask, "comp_type"] = joints.loc[mask, joint_type_col]
     distributors["comp_type"] = "distributor"
-    MVLV_trafos["comp_type"] = MVLV_trafos["ART"].apply(
-          lambda x: "trafo_HV" if x == "Umspannwerk" else "trafo") #distuingish MV/HV_trafo
+    MVLV_trafos["comp_type"] = MVLV_trafos[joint_type_col].apply(
+          lambda x: "trafo_HV" if x == transformer_hv_marker_value else "trafo") #distuingish MV/HV_trafo
     HA_Bus["comp_type"] = "house_connection"
 
     ##buses
