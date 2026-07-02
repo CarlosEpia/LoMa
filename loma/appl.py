@@ -129,7 +129,7 @@ else:
     n = add_heat_loads_to_network(n, project_config)
 
 # insert EV_loads
-n = import_charging_points(n, args["path_to_shapefiles_grid"], args['scenario'])
+n = import_charging_points(n, args["path_to_shapefiles_grid"], project_config)
 
 
 n.lines.s_nom_extendable = False

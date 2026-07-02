@@ -16,7 +16,7 @@ import logging
 def import_charging_points(
     n,
     input_folder,
-    scenario,
+    project_config,
     *,
     export_bus_shapefile=False,
     export_debug_csv=False,
@@ -363,20 +363,10 @@ def import_charging_points(
     )
             
     #### Adjust amount of charging_points due to scenario selection
-    con_buses = n.buses[n.buses.comp_type == "house_connection"].copy()       
+    con_buses = n.buses[n.buses.comp_type == "house_connection"].copy()
 
-    # scenario targets 
-    target_ev_counts = {
-       "Husum_statusQuo": 412,
-       "Husum_2035": 1000,
-    } 
-    if scenario not in target_ev_counts:
-        raise ValueError(f"Unknown scenario {scenario}")
-    target_count = target_ev_counts[scenario]
-    
-    # scaling factor for MGB_Model 
-    scaling_factor = len(con_buses) / 9599 # 9599 is the amount of buses for house_connection_busses in whole Husum
-    target_count = int(target_count * scaling_factor)
+    # scenario target for the configured project/scenario
+    target_count = project_config["scenario_targets"]["ev_charging_points"]
     
     # Determine how many additional EVs are needed
     current_count = len(n.loads[n.loads.carrier=='charging_point'])
