@@ -1410,7 +1410,6 @@ def export_shape_files_from_network(n, output_path, crs):
       
       
 def create_pypsa_network(
-    scenario,
     shape_files_folder,
     q_households_folder,
     heat_pump_folder,
@@ -1429,10 +1428,8 @@ def create_pypsa_network(
         n.c.shapes.static.set_crs(epsg_code, allow_override=True, inplace=True)
     n.srid = epsg_code
 
-    if scenario == 'Husum_2035':
-          time_index = pd.date_range("2035-01-01", periods=8760, freq="h")
-    else:
-          time_index = pd.date_range("2025-01-01", periods=8760, freq="h")
+    start_year = project_config["scenario_targets"]["time_index_start_year"]
+    time_index = pd.date_range(f"{start_year}-01-01", periods=8760, freq="h")
     n.snapshots = time_index
     print(f"    -> Snapshots set: {len(time_index)} hours")
 

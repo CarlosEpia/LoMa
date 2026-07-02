@@ -89,7 +89,6 @@ if args["import_network_structure"]:
 else:
     # create pypsa network with grid topology shapefiles
     n = create_pypsa_network(
-        args["scenario"],
         args["path_to_shapefiles_grid"],
         args["path_to_household_data"],
         args["path_to_heat_pump_data"],
