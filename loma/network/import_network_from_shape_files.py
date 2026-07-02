@@ -785,7 +785,7 @@ def get_nearest_bus(point, bus_tree, buses_df):
 
 
 ###creating pypsa grid
-def import_grid_infrastructure(n, buses, lines, cable_types):
+def import_grid_infrastructure(n, buses, lines, cable_types, project_config):
     """
     Based on exported shapefiles recreate the grid infrastructure as pysa_network
 
@@ -804,6 +804,9 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
 
     """
 
+    lv_v_nom = project_config["project"]["voltage_levels"]["lv"]
+    mv_v_nom = project_config["project"]["voltage_levels"]["mv"]
+
     #### ------- add buses to network -------##
     buses["centroid"] = buses.geometry.centroid
     for _, row in buses.iterrows():
@@ -812,11 +815,11 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         n.buses.at[row["bus_id"], "household_count"] = row["household_count"]
         n.buses.at[row["bus_id"], "trafo_cap"] = row["s_nom"]
         n.buses.at[row["bus_id"], "geom"] = row["geometry"]
-        
+
     mask_mv = n.buses.comp_type == "MV_Muffe"
-    n.buses.loc[mask_mv, "v_nom"] = 20
-    n.buses.loc[~mask_mv, "v_nom"] = 0.4
-    
+    n.buses.loc[mask_mv, "v_nom"] = mv_v_nom
+    n.buses.loc[~mask_mv, "v_nom"] = lv_v_nom
+
 
     #### ------- add lines to network ------###
     # prepare KDTree
@@ -1009,7 +1012,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
               n.add(
                   "Bus",
                   name=bus1,
-                  v_nom=20,
+                  v_nom=mv_v_nom,
                   carrier="AC",
                   household_count=bus.household_count,
                   x=bus.x,
@@ -1032,7 +1035,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types):
         n.add(
             "Bus",
             name=bus0,
-            v_nom=20,
+            v_nom=mv_v_nom,
             carrier="AC",
             household_count=bus.household_count,
             x=bus.x,
@@ -1148,10 +1151,11 @@ def implement_switches_LV(n, input_path, project_config):
     return n
 
 
-def assign_lv_grid_ids(n):
+def assign_lv_grid_ids(n, project_config):
 
     # --- 1. LV-Busse & Trafos (identisch zu vorher) ---
-    lv_buses = set(n.buses[n.buses.v_nom == 0.4].index)
+    lv_v_nom = project_config["project"]["voltage_levels"]["lv"]
+    lv_buses = set(n.buses[n.buses.v_nom == lv_v_nom].index)
 
     trafo_df  = n.transformers
     lv_trafos = trafo_df[trafo_df.bus1.isin(lv_buses) | trafo_df.bus0.isin(lv_buses)]
@@ -1442,7 +1446,7 @@ def create_pypsa_network(
 
     print("=== [6/10] Importing grid infrastructure into PyPSA ===")
     buses, lines = import_grid_infrastructure(
-        n, buses, split_lines, cable_types
+        n, buses, split_lines, cable_types, project_config
     )
     print(
         f"    -> PyPSA now contains "
@@ -1458,7 +1462,7 @@ def create_pypsa_network(
     
     print("=== [9/10] Assign LV grid IDs ===")
     #merge_lines_splitted_by_bus(n)
-    n = assign_lv_grid_ids(n)
+    n = assign_lv_grid_ids(n, project_config)
     
     if export_shape_files:
         print("=== [10/10] Exporting grid shapefiles ===")
