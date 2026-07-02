@@ -1206,20 +1206,29 @@ def assign_lv_grid_ids(n, project_config):
 
 
 def fix_grid_infrastructure(n, project_config):
-      
-    ### Add slack Generator and dummy MV-grid (for test-case) for working lopf 
-    if len(n.buses) < 1000:
+
+    ### Add slack Generator and dummy MV-grid (for test-case) for working lopf
+    if project_config["project"]["is_test_model"]:
         n = add_dummy_mv_grid(n)
     else:
+        # slack bus = HV-side terminal of the transformer to the transmission grid
+        hv_buses = n.buses.index[
+            (n.buses.comp_type == "trafo_HV") & n.buses.index.str.endswith("_HV")
+        ]
+        if len(hv_buses) == 0:
+            raise ValueError(
+                "No HV transformer bus (comp_type 'trafo_HV') found to use as slack bus."
+            )
+        slack_bus = hv_buses[0]
         n.add("Generator",
               name="HV_dummy_gen_slack",
-              bus="bus_20111_HV",
+              bus=slack_bus,
               p_nom=10000,
               carrier="AC",
               control='Slack',
               marginal_cost=50)
-        n.buses.at["bus_20111_HV", "control"] = "Slack"
-        
+        n.buses.at[slack_bus, "control"] = "Slack"
+
 
     ### Delete loop lines
     loop_lines = n.lines[n.lines.bus0 == n.lines.bus1]
