@@ -130,10 +130,6 @@ def add_heat_loads_to_network(n, project_config):
     
     # scenario target for the configured project/scenario
     target_count = project_config["scenario_targets"]["heat_pumps"]
-    # scaling factor for models covering only part of the reference grid
-    reference_bus_count = project_config["scenario_targets"]["reference_house_connection_bus_count"]
-    scaling_factor = len(potential_buses) / reference_bus_count
-    target_count = int(target_count * scaling_factor)
     current_count = len(bus_with_hp)
 
     if target_count < current_count:
