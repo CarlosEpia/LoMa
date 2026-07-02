@@ -14,20 +14,16 @@ import logging
 from loma.demands.household_count import parse_bus_numbers
 
 
-def check_heat_pumps(n):
+def check_heat_pumps(n, hp_shapefile_path):
     """
-    Assigns Heat Pumps to buses based on input CSV or fallback shapefile.
-
-    Priority:
-    1. If 'heat_pumps.csv' exists, use it.
-    2. Otherwise, use 'hp_2035.shp' fallback.
+    Assigns Heat Pumps to buses based on a heat pump location shapefile.
     """
     con_buses = n.buses[n.buses.comp_type == "house_connection"].copy()
     con_buses["HP"] = 0  # Initialize HP column
     con_buses["hp_capacity"] = 0.0
 
-    print("Heat_pumps are distributes according to shapefile 'hp_2035.shp'.")
-    shp_path = "data/Input_files/hp_husum_2035/hp_2035.shp"
+    print(f"Heat_pumps are distributed according to shapefile '{hp_shapefile_path}'.")
+    shp_path = hp_shapefile_path
 
     if not os.path.isfile(shp_path):
         raise FileNotFoundError(f"No file found like:{shp_path}")
@@ -67,7 +63,7 @@ def check_heat_pumps(n):
     return n
 
 
-def add_heat_loads_to_network(n, scenario):
+def add_heat_loads_to_network(n, project_config):
     """
     Adds heat loads to a PyPSA network if bus.HP == 1.
     Load profiles are calculated based on census cells, daily profiles,
@@ -83,7 +79,7 @@ def add_heat_loads_to_network(n, scenario):
     pypsa.Network
         Network with additional loads and corresponding p_set time series.
     """
-    n = check_heat_pumps(n)
+    n = check_heat_pumps(n, project_config["paths"]["heat_pump_shapefile"])
     # load input-data
     census_cells = gpd.read_file("data/data_bundle/Census_cells_SH.shp")
     daily_profiles = pd.read_hdf("data/data_bundle/heat_daily_profiles.hdf")
@@ -132,17 +128,11 @@ def add_heat_loads_to_network(n, scenario):
     # Filter buses with Heatpump 
     bus_with_hp = mapped_buses[mapped_buses.HP == 1].copy()
     
-    # scenario targets 
-    target_hp_counts = {
-        "Husum_statusQuo": 575,
-        "Husum_2035": 2600,
-    }
-    
-    if scenario not in target_hp_counts:
-        raise ValueError(f"Unknown scenario {scenario}")
-    target_count = target_hp_counts[scenario]
-    # scaling factor for MGB_Model 
-    scaling_factor = len(potential_buses) / 9599 # 9599 is the amount of buses for house_connection_busses in whole Husum
+    # scenario target for the configured project/scenario
+    target_count = project_config["scenario_targets"]["heat_pumps"]
+    # scaling factor for models covering only part of the reference grid
+    reference_bus_count = project_config["scenario_targets"]["reference_house_connection_bus_count"]
+    scaling_factor = len(potential_buses) / reference_bus_count
     target_count = int(target_count * scaling_factor)
     current_count = len(bus_with_hp)
 

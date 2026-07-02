@@ -1412,7 +1412,6 @@ def export_shape_files_from_network(n, output_path, crs):
 def create_pypsa_network(
     shape_files_folder,
     q_households_folder,
-    heat_pump_folder,
     cable_types,
     household_count,
     export_shape_files,

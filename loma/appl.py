@@ -51,7 +51,6 @@ args = {
     "path_to_shapefile_MV_grid": project_config["paths"]["mv_grid_boundary"],
     "nuts3_focus_region": project_config["nuts3_focus_region"],
     "path_to_household_data": project_config["paths"]["household_data"],
-    "path_to_heat_pump_data": project_config["paths"]["heat_pump_data"],
     "batteries_path": project_config["paths"]["batteries"],
     "pv_rooftop_path": project_config["paths"]["pv_rooftop"],
     "pv_feedin_path": project_config["paths"]["pv_feedin"],
@@ -91,7 +90,6 @@ else:
     n = create_pypsa_network(
         args["path_to_shapefiles_grid"],
         args["path_to_household_data"],
-        args["path_to_heat_pump_data"],
         args["Kabeltypen"],
         args["use_census_household_data"],
         args["export_shape_files_grid"],
@@ -128,7 +126,7 @@ else:
     )
 
     # insert_heat_loas_for_heat_pump_location
-    n = add_heat_loads_to_network(n, args["scenario"])
+    n = add_heat_loads_to_network(n, project_config)
 
 # insert EV_loads
 n = import_charging_points(n, args["path_to_shapefiles_grid"], args['scenario'])
