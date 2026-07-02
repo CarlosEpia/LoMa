@@ -806,6 +806,7 @@ def import_grid_infrastructure(n, buses, lines, cable_types, project_config):
 
     lv_v_nom = project_config["project"]["voltage_levels"]["lv"]
     mv_v_nom = project_config["project"]["voltage_levels"]["mv"]
+    line_snap_m = project_config["thresholds"]["line_endpoint_snap_m"]
 
     #### ------- add buses to network -------##
     buses["centroid"] = buses.geometry.centroid
@@ -870,40 +871,40 @@ def import_grid_infrastructure(n, buses, lines, cable_types, project_config):
         bus1, dist1 = get_nearest_bus_robust(end_point, buses_use, tree=tree_use)
 
         # ---- Starting point ----
-        if 10 > dist0 > 0.1:
+        if line_snap_m > dist0 > 0.1:
             traf_bus, traf_dist = get_nearest_bus_robust(
                 start_point, traf_buses, tree=traf_tree
             )
-            if traf_dist < 10:
+            if traf_dist < line_snap_m:
                 bus0, dist0 = traf_bus, traf_dist
             else:
                 bus0, dist0 = get_nearest_bus_robust(
                         start_point, buses_use, tree=tree_use
                     )
                 print(
-                        f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
+                        f"Check line {row['line_id']} – no nearby trafo/distributor (<{line_snap_m} m), using nearest bus instead."
                     )
-        elif dist0 >= 10:
+        elif dist0 >= line_snap_m:
             print(
                 f"Line {row['line_id']} skipped – no trafo/bus nearby at beginning of line."
             )
             return None  # skip
 
         # ---- End point ----
-        if 10 > dist1 > 0.1:
+        if line_snap_m > dist1 > 0.1:
             traf_bus, traf_dist = get_nearest_bus_robust(
                 end_point, traf_buses, tree=traf_tree
             )
-            if traf_dist < 10:
+            if traf_dist < line_snap_m:
                 bus1, dist1 = traf_bus, traf_dist
             else:
                 bus1, dist1 = get_nearest_bus_robust(
                         end_point, buses_use, tree=tree_use
                     )
                 print(
-                        f"Check line {row['line_id']} – no nearby trafo/distributor (<10 m), using nearest bus instead."
+                        f"Check line {row['line_id']} – no nearby trafo/distributor (<{line_snap_m} m), using nearest bus instead."
                     )
-        elif dist1 >= 10:
+        elif dist1 >= line_snap_m:
             print(
                 f"Line {row['line_id']} skipped – no trafo/bus nearby at end of line."
             )
@@ -1128,8 +1129,9 @@ def implement_switches_LV(n, input_path, project_config):
 
     # 2. Erstelle einen winzigen Puffer um die Schalter (z.B. 2cm)
     # Das macht aus der Linie eine schmale Fläche
+    switch_buffer_m = project_config["thresholds"]["switch_buffer_m"]
     switches_buffered = switches.copy()
-    switches_buffered['geometry'] = switches.geometry.buffer(0.02) 
+    switches_buffered['geometry'] = switches.geometry.buffer(switch_buffer_m)
 
     # 3. Räumlicher Join: Welche Leitung liegt INNERHALB dieses Puffers?
     # 'within' stellt sicher, dass die Leitung fast komplett im Puffer liegen muss
