@@ -86,14 +86,21 @@ def create_gdf_from_shape(input_folder, project_config):
         os.path.join(input_folder, gis_files["mv_lv_stations"])
     )
 
-    #delete lines which are "out of service"
-    LV_lines = LV_lines[~(LV_lines[status_col].isin(status_inactive_values))]
-    HA_lines = HA_lines[~(HA_lines[status_col].isin(status_inactive_values))]
+    def drop_inactive(df, values):
+        """Filter out rows with the given status values; no-op if the status column is absent."""
+        if status_col not in df.columns:
+            return df
+        return df[~df[status_col].isin(values)]
+
+    #delete lines which are "out of service" (skipped if the status column doesn't exist)
+    LV_lines = drop_inactive(LV_lines, status_inactive_values)
+    HA_lines = drop_inactive(HA_lines, status_inactive_values)
     if not MV_lines.empty:
-          MV_lines = MV_lines[~(MV_lines[status_col].isin(status_inactive_values))]
+          MV_lines = drop_inactive(MV_lines, status_inactive_values)
 
     #delete ditributors with type 'Beleuchtung' (leads to wrong connnection in some cases)
-    distributors = distributors[distributors[status_col] != status_exclude_lighting_value]
+    if status_col in distributors.columns:
+        distributors = distributors[distributors[status_col] != status_exclude_lighting_value]
 
     street_col = gis_columns["street_column"]
     house_number_col = gis_columns["house_number_column"]
@@ -120,6 +127,10 @@ def create_gdf_from_shape(input_folder, project_config):
     for df in [LV_lines, MV_lines, HA_lines]:
         if not df.empty:
             df.rename(columns={cable_type_col: "KABELTYP"}, inplace=True)
+            if "KABELTYP" not in df.columns:
+                # no cable type info available - process_line() already falls
+                # back to Default_LV/Default_MV cable params for unknown types
+                df["KABELTYP"] = np.nan
 
     # component-type-column for distinguish the components
     LV_lines["comp_type"] = "lv_line"
@@ -127,10 +138,20 @@ def create_gdf_from_shape(input_folder, project_config):
         MV_lines["comp_type"] = "mv_line"
     HA_lines["comp_type"] = "hc_line"
     mask = joints["comp_type"].isna()
-    joints.loc[mask, "comp_type"] = joints.loc[mask, joint_type_col]
+    if joint_type_col in joints.columns:
+        joints.loc[mask, "comp_type"] = joints.loc[mask, joint_type_col]
+    else:
+        # no type info available - fall back to a generic joint type so these
+        # buses are still recognized as splitting points in split_lines_on_joints
+        joints.loc[mask, "comp_type"] = "Verbindungsmuffe"
     distributors["comp_type"] = "distributor"
-    MVLV_trafos["comp_type"] = MVLV_trafos[joint_type_col].apply(
-          lambda x: "trafo_HV" if x == transformer_hv_marker_value else "trafo") #distuingish MV/HV_trafo
+    if joint_type_col in MVLV_trafos.columns:
+        MVLV_trafos["comp_type"] = MVLV_trafos[joint_type_col].apply(
+              lambda x: "trafo_HV" if x == transformer_hv_marker_value else "trafo") #distuingish MV/HV_trafo
+    else:
+        # no type info available - assume regular MV/LV substation, not the
+        # (typically singular) HV transformer to the transmission grid
+        MVLV_trafos["comp_type"] = "trafo"
     HA_Bus["comp_type"] = "house_connection"
 
     ##buses
@@ -442,7 +463,7 @@ def cut_line_between_distances(
     return LineString(coords)
 
 
-def split_lines_on_joints(lines, buses, tolerance=0.1):
+def split_lines_on_joints(lines, buses, project_config, tolerance=0.1):
     """
     Splits LV-, HC-lines at joint buses (snapped to the line) and returns a new GeoDataFrame
     with all lines (LV, HC, MV).
@@ -456,17 +477,9 @@ def split_lines_on_joints(lines, buses, tolerance=0.1):
         ~lines.comp_type.isin(["lv_line", "hc_line"])
     ].copy()
 
-    joint_types = [
-        "Hausanschlußmuffe",
-        "Verbindungsmuffe",
-        "Endmuffe",
-        "Übergangsmuffe",
-        "Reparaturmuffe",
-        "Abzweigmuffe",
-        "vorverlegtes Ende",
-        "HA-Kombimuffe",
-        "distributor",
-    ]
+    # "distributor" is our own internal comp_type marker (not a raw ART value);
+    # the actual joint/sleeve type values come from the GIS schema and are configurable
+    joint_types = project_config["gis_column_mapping"]["joint_type_values"] + ["distributor"]
 
     joint_buses = buses[buses.comp_type.isin(joint_types)].copy()
     joint_sindex = joint_buses.sindex
@@ -1003,11 +1016,13 @@ def import_grid_infrastructure(n, buses, lines, cable_types, project_config):
         if bus.comp_type =='trafo':
               bus1 = bus.name
               bus0 = f"{bus1}_MV"  # Same bus for MV level
-              s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 0.63
-        else: 
+              has_capacity = pd.notna(bus.trafo_cap) and bus.trafo_cap != 0
+              s_nom = bus.trafo_cap / 1e3 if has_capacity else 0.63
+        else:
               bus1 = f"{bus.name}_MV"
               bus0 = f"{bus.name}_HV"  # Same bus for HV level
-              s_nom = bus.trafo_cap / 1e3 if bus.trafo_cap != 0 else 63
+              has_capacity = pd.notna(bus.trafo_cap) and bus.trafo_cap != 0
+              s_nom = bus.trafo_cap / 1e3 if has_capacity else 63
 
               ### to add both MV- and HV-bus to network
               n.add(
@@ -1448,7 +1463,7 @@ def create_pypsa_network(
         buses = count_households_per_bus_input_file(buses, q_households_folder)
 
     print("=== [5/10] Splitting lines at joint buses ===")
-    split_lines = split_lines_on_joints(lines, buses)
+    split_lines = split_lines_on_joints(lines, buses, project_config)
     print(f"    -> Lines after splitting: {len(split_lines)}")
 
     print("=== [6/10] Importing grid infrastructure into PyPSA ===")
