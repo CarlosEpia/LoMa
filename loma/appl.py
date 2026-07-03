@@ -8,7 +8,6 @@ Created on Thu Jun 19 15:11:55 2025
 
 from datetime import datetime
 
-from loma.constraints.constraints import load_reduction_constraint_14a
 from loma.demands.create_household_distribution import create_household_dist
 from loma.demands.create_industrial_demand import (
     insert_ind_demand_per_building,
@@ -19,33 +18,21 @@ from loma.demands.import_EV_demand import import_charging_points
 from loma.demands.import_hp_demand import add_heat_loads_to_network
 
 from loma.network.correct_meshed_grid import avoid_meshes_in_network
-from loma.network.flexibilities_14a_heat_pump import (
-    insert_heat_pump_flexibilities_14a,
-)
 from loma.network.load_cable_types import load_kabeltypen
 from loma.network.load_project_config import load_project_config
 from loma.network.import_network_from_shape_files import create_pypsa_network
-from loma.plot_results import plot_results
 from loma.pv_rooftop_and_home_battery.pv_rooftop_and_home_battery import (
     insert_pv_rooftop_and_battery,
 )
-from loma.pypsa_model_into_ding0_shape import (
-    prepare_ding0_shape_export,
-)
 import pypsa
 from shapely import wkt
-
-from loma.pypsa_model_into_ding0_shape import (
-    add_dummy_mv_grid,
-    prepare_ding0_shape_export,
-)
 
 
 PROJECT_CONFIG_PATH = "data/Input_files/project_config_husum.yaml"
 project_config = load_project_config(PROJECT_CONFIG_PATH)
 
 args = {
-    "import_network_structure": False,  # "/home/carlos/LoMa/network_structures/MGB",
+    "import_network_structure": False,  # set to a path to import a pre-built network from CSVs instead of building one from shapefiles
     "path_to_shapefiles_grid": project_config["paths"]["shapefiles_grid"],
     "path_to_shapefile_MV_grid": project_config["paths"]["mv_grid_boundary"],
     "nuts3_focus_region": project_config["nuts3_focus_region"],

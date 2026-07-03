@@ -21,7 +21,6 @@ from shapely.ops import linemerge, unary_union
 import networkx as nx
 from collections import deque
 
-from loma.demands.import_hp_demand import check_heat_pumps
 from loma.demands.household_count import count_households_per_bus_input_file
 from loma.demands.household_count import count_households_per_bus_census_data
 from loma.pypsa_model_into_ding0_shape import add_dummy_mv_grid
@@ -597,8 +596,6 @@ def snap_joint_buses_to_lines(lines, buses, tolerance=0.1):
             snapped_indices.append(idx)
 
     buses_updated = pd.concat([joint_buses, other_buses]).sort_index()
-
-    # buses_updated.to_file('/home/student/Documents/LoMa/Code/test_grid_buses_before_network.shp')
 
     return buses_updated
 

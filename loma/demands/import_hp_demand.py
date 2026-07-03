@@ -11,8 +11,6 @@ import geopandas as gpd
 import numpy as np
 import logging
 
-from loma.demands.household_count import parse_bus_numbers
-
 
 def check_heat_pumps(n, hp_shapefile_path):
     """
@@ -151,7 +149,6 @@ def add_heat_loads_to_network(n, project_config):
     # Initialize load time series
     snapshots = n.snapshots
     n_hours = len(snapshots)
-    n_buses = len(bus_with_cell)
     load_profiles = pd.DataFrame(
         0.0, index=snapshots, columns=bus_with_cell.index
     )

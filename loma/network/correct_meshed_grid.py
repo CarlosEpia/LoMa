@@ -99,7 +99,6 @@ def analyze_lv_feeding_with_boundaries(n):
     
     #check bus connections
     meshed_buses = con[con.apply(len) > 1]
-    isolated_buses = con[con.apply(len) < 1]
     print(f"\nAnzahl vermaschter Busse: {len(meshed_buses)}")
 
     if not meshed_buses.empty:

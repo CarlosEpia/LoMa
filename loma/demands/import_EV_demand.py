@@ -6,7 +6,6 @@ import re
 from collections import defaultdict
 
 import random
-import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely.strtree import STRtree

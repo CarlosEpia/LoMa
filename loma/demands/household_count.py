@@ -10,9 +10,6 @@ import pandas as pd
 import geopandas as gpd
 from rapidfuzz import process, fuzz
 import numpy as np
-from shapely.geometry import Point
-
-#### manual household count based on inout file
 
 
 def hausnummer_split(hn):
@@ -82,35 +79,6 @@ def parse_bus_numbers(hn_entry):
     return numbers
 
 
-'''
-def parse_bus_numbers(hn_entry):
-    """
-    Transfer special housenumber entries into a list of numbers/letters-tuples
-    Examples:
-    '14, 14a, 14b' -> [(14,''), (14,'a'), (14,'b')]
-    '39-43' -> [(39,''), (41,''), (43,'')]
-    """
-    if pd.isna(hn_entry):
-        return []
-    
-    parts = [p.strip() for p in str(hn_entry).split(',')]
-    numbers = []
-    
-    for p in parts:
-        if '-' in p:
-            bounds = re.findall(r'\d+', p)
-            if len(bounds) == 2:
-                start, end = map(int, bounds)
-                step = 2 if start % 2 == 0 else 2
-                for num in range(start, end + 1, step):
-                    numbers.append((num, ''))
-        else:
-            numbers.append(hausnummer_split(p))
-    return numbers
-
-'''
-
-
 def count_households_per_bus_input_file(buses, path, threshold=80):
     # load households
     q_households = pd.read_csv(path)
@@ -130,7 +98,6 @@ def count_households_per_bus_input_file(buses, path, threshold=80):
         street = hh_row["Straße"]
         num = hh_row["Hausnummer_int"]
         letter = hh_row["Hausnummer_letter"]
-        # print('aktuelle_starße', street)
         if pd.isna(num):
             continue
 
@@ -157,7 +124,6 @@ def count_households_per_bus_input_file(buses, path, threshold=80):
         ]
         if not exact_matches.empty:
             buses.loc[exact_matches.index, "household_count"] += 1
-            # print('Adresse:', street, num, letter, exact_matches[['Straße','parsed_numbers']])
             continue
 
         # 2) fallback: match number only
@@ -168,7 +134,6 @@ def count_households_per_bus_input_file(buses, path, threshold=80):
         ]
         if not number_matches.empty:
             buses.loc[number_matches.index, "household_count"] += 1
-            # print('Adresse:', street, num, letter, number_matches[['Straße','parsed_numbers']])
             continue
 
         # 3) fallback: nearest number on same side
@@ -203,7 +168,6 @@ def count_households_per_bus_input_file(buses, path, threshold=80):
         nearest_idx = same_side["diff"].idxmin()
         buses.loc[nearest_idx, "household_count"] += 1
 
-        # print('Adresse:', street, num, letter, buses.loc[nearest_idx, ['Straße', 'parsed_numbers']])
 
     # secure that every house_connection bus has at least one one household
     buses.loc[
@@ -214,7 +178,6 @@ def count_households_per_bus_input_file(buses, path, threshold=80):
 
 
 def count_households_per_bus_census_data(buses, census_data):
-    # import pdb; pdb.set_trace()
     # create GeoDataFrames
     census_data = gpd.GeoDataFrame(
         census_data,

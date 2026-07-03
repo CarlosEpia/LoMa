@@ -257,7 +257,6 @@ def assign_cts_demand_to_buses(
 
 
 def inser_cts_demand_per_building(network, shape_path, target_demand=31):
-    # breakpoint()
     shape = gpd.read_file(shape_path)
     cts_demands = load_cts_demand_per_building(shape)
     network = assign_cts_demand_to_buses(network, cts_demands, target_demand)

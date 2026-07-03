@@ -20,7 +20,6 @@ def plot_results(n):
     gen_14a = n.generators[n.generators.carrier == "14a"]
     gen_14a_t = n.generators_t["p"].loc[:, gen_14a.index]
     gen_14a_t = gen_14a_t.loc[n.snapshots, :]
-    total_gen_14a_t = gen_14a_t.sum()
 
     fig, axL = plt.subplots(figsize=(12, 6))
     lines_exp_t.plot(ax=axL, legend=False)
