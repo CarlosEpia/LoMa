@@ -5,3 +5,4 @@ test_*.shx
 test_*.prj
 test_*.cpg
 *.pyc
+*.egg-info/
