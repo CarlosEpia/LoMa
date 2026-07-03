@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Mon Jan  5 11:37:21 2026
-
-@author: student
-"""
+"""Detects and resolves meshed (looped) sections of the LV/MV grid so it stays radial for PyPSA's power flow."""
 import networkx as nx
 import pandas as pd
 from collections import deque

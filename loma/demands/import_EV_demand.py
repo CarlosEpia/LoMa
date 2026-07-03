@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Imports existing EV charging points and scales the total count to the project's scenario target."""
 
 import os
 import re

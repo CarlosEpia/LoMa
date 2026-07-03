@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Jul  8 14:23:23 2025
-
-@author: student
-"""
+"""Downloads OSM industrial areas for a NUTS3 region and assigns industrial electricity demand profiles to buildings."""
 
 import geopandas as gpd
 import osmnx as ox

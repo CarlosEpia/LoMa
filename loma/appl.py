@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Thu Jun 19 15:11:55 2025
-
-@author: student
-"""
+"""Entry point script: builds a PyPSA grid model for one project (Stadtwerk/region) from GIS shapefiles and demand data, as configured by a project config YAML."""
 
 from datetime import datetime
 

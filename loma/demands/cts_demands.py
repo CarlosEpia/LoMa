@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Assigns commercial/trade/services (CTS) electricity demand to buses based on building floor area shares."""
+
 import ast
 
 import geopandas as gpd

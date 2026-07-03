@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Sep  3 14:47:50 2025
+"""Implements the German §14a EnWG load-reduction constraint for controllable consumption devices (heat pumps, wallboxes)."""
 
-@author: student
-"""
 
-    
 def load_reduction_constraint_14a(n, snapshots):
     # relevant generators for load reduction
     gens_14a = n.generators.index[n.generators.carrier == "14a"]

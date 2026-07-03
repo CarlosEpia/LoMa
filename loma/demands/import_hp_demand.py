@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Aug 20 10:27:02 2025
-
-@author: student
-"""
+"""Assigns heat pump locations and heat load profiles to buses."""
 import os
 import pandas as pd
 import geopandas as gpd

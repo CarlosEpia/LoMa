@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Mon Jun 23 11:02:25 2025
-
-@author: student
-
-"""
+"""Distributes household electricity demand profiles across buses and assigns standard load profiles (SLP)."""
 
 import geopandas as gpd
 import numpy as np

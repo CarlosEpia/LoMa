@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Sep  2 12:31:02 2025
-
-@author: student
-"""
+"""Implements German §14a EnWG flexibility handling for heat pump loads."""
 import numpy as np
 
 

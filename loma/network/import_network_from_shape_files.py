@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Thu Jun 19 09:49:16 2025
-
-@author: student
-"""
+"""Builds a PyPSA network (buses, lines, transformers) from GIS grid-topology shapefiles, based on the project config."""
 
 import os
 from collections import defaultdict

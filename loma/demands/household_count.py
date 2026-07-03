@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Aug 15 09:10:51 2025
-
-@author: student
-"""
+"""Counts households per bus, either from a manual street/house-number input file or from census cell data."""
 import re
 import pandas as pd
 import geopandas as gpd

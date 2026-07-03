@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Inserts solar rooftop generators and home battery storage units onto house-connection buses, scaled to project config targets."""
+
 import ast
 import geopandas as gpd
 import pandas as pd

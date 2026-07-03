@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Oct 28 17:32:48 2025
-
-@author: paul
-"""
+"""Plots §14a-relevant time series (line loading, heat pump generation) and exports bus/line geometries for a solved network."""
 import os
 import matplotlib.pyplot as plt
 import geopandas as gpd

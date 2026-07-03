@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Oct 10 09:10:41 2025
-
-@author: student
-"""
+"""Converts a PyPSA network into the ding0/eDisGo grid data format. Not currently called from appl.py."""
 import pandas as pd
 import geopandas as gpd
 from pyproj import Transformer

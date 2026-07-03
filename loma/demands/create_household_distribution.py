@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Jun 24 07:53:13 2025
-
-@author: student
-"""
+"""Derives the household-type distribution (100x100m census cells) for a project region from the bundled nationwide census data."""
 
 import os
 import zipfile
