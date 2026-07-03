@@ -22,7 +22,10 @@ target_file_hh_size = "data/data_bundle/census_22_hh_size.zip"
 #define folder where excel_file with household-distibution is stored (more information:get_census_households_nuts3_raw() )
 path_to_dist_data = "data/data_bundle/1000A-3098_de.xlsx"
 
-#define_paths to shapefiles for SH, Nuts3-districts
+# Define paths to shapefiles for the federal state and its NUTS3 districts,
+# used to clip/assign the bundled nationwide census data to the project region.
+# Currently Schleswig-Holstein specific: a Stadtwerk outside SH must replace
+# both shapefiles with the equivalent boundaries for its own federal state.
 path_to_sh_shape = 'data/data_bundle/schleswig_holstein.shp'
 path_to_nuts3_sh_shapes = 'data/data_bundle/Nuts3_SH.shp'
 

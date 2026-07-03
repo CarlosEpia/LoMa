@@ -21,6 +21,8 @@ def download_osm_industrial_areas(region_nuts3):
     gdf["area_ha"] = gdf.geometry.area / 10_000  # Fläche in Hektar
 
     #filter out data for defined region
+    # Currently Schleswig-Holstein specific: a Stadtwerk outside SH must
+    # replace this NUTS3-district shapefile with its own federal state's.
     sh_nuts3 = gpd.read_file('data/data_bundle/Nuts3_SH.shp')
     region_name = region_nuts3.split(',')[0]
     sh_region = sh_nuts3[sh_nuts3.gen == region_name]
