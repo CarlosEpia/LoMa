@@ -154,9 +154,10 @@ def create_gdf_from_shape(input_folder, project_config):
     trafo_columns = ["comp_type", "Straße", "Hausnummer", "s_nom", "geometry"]
 
     def ensure_columns(df, columns):
+        """Return df restricted to the given columns, adding any missing ones as NaN."""
         for col in columns:
             if col not in df.columns:
-                df[col] = np.nan  # oder np.nan
+                df[col] = np.nan
         return df[columns]
 
     joints_clean = ensure_columns(joints, bus_columns)
@@ -234,11 +235,11 @@ def merge_connected_mv_lines(lines, tolerance=0.001):
                     or base_end.distance(other_end) < tolerance
                 ):
 
-                    # Merge Linien korrekt orientiert
+                    # merge lines with correct orientation
                     merged_geom = linemerge(
                         unary_union([base_geom, other_geom])
                     )
-                    # Falls MultiLineString, längste Linie wählen
+                    # if MultiLineString, pick the longest line
                     if merged_geom.geom_type == "MultiLineString":
                         merged_geom = max(
                             merged_geom.geoms, key=lambda x: x.length
@@ -276,6 +277,7 @@ def merge_lines_splitted_by_bus(n, remove_buses=True, tolerance=0.001):
     total_merged = 0
 
     def single_pass():
+        """Run one merge pass over the network; returns the number of lines merged."""
         merged_count = 0
         candidates = []
 
@@ -325,6 +327,7 @@ def merge_lines_splitted_by_bus(n, remove_buses=True, tolerance=0.001):
                 continue
 
             def other_bus(line, mid):
+                """Return the endpoint of `line` that is not `mid`."""
                 row = n.lines.loc[line]
                 return row.bus1 if row.bus0 == mid else row.bus0
 
@@ -751,6 +754,7 @@ def map_load_bus_to_network_bus(buses, lines):
     all_lines_geom = lines.unary_union
 
     def on_line(geom, tolerance=1e-6):
+        """Check whether geom lies on (or within tolerance of) any line."""
         return all_lines_geom.distance(geom) < tolerance
 
     # Keep only buses that lie on any line
@@ -768,7 +772,7 @@ def get_nearest_bus_robust(point, bus_gdf, tree, k=5):
     if bus_gdf.empty:
         return None, np.inf
 
-    # k nächste Kandidaten über Tree
+    # k nearest candidates via the tree
     _, idxs = tree.query([point.x, point.y], k=min(k, len(bus_gdf)))
 
     # exakte Distanz zur Geometrie
@@ -855,6 +859,10 @@ def import_grid_infrastructure(n, buses, lines, cable_types, project_config):
     mv_tree = cKDTree(mv_coords)
 
     def process_line(row):
+        """Snap one line's endpoints to the nearest bus (trafo/distributor
+        within line_snap_m, otherwise any nearby bus), look up its cable
+        parameters, and return a dict describing the resulting PyPSA line,
+        or None if no bus is close enough to either endpoint."""
         line_id = row["line_id"]
         line_geom = row.geometry
         start_point = Point(line_geom.coords[0])
@@ -1109,40 +1117,40 @@ def import_grid_infrastructure(n, buses, lines, cable_types, project_config):
 
 
 def open_LV_circle(n, lv_line_idx):
+    """Remove a single line by ID, e.g. to open an LV ring/loop at a chosen point."""
     if lv_line_idx in n.lines.index:
         n.lines.drop(lv_line_idx, inplace=True)
-        print(f"Leitung '{lv_line_idx}' wurde entfernt.")
+        print(f"Line '{lv_line_idx}' was removed.")
     else:
-        print(f"Leitung '{lv_line_idx}' nicht gefunden im Netzwerk.")
+        print(f"Line '{lv_line_idx}' not found in network.")
 
     return n
 
 
 def implement_switches_LV(n, input_path, project_config):
+    """Remove line segments that coincide with an open LV switch, so the
+    switch correctly splits the grid into separate LV networks."""
     try:
         switches = gpd.read_file(input_path)
     except Exception as e:
-        print(f"Fehler: {e}")
+        print(f"Error: {e}")
         return n
 
-    # 1. n.lines temporär in GeoDataFrame umwandeln
-    # Wichtig: 'geom' (oder 'geometry') muss die Geometrie-Objekte enthalten
+    # 1. temporarily turn n.lines into a GeoDataFrame
+    # important: 'geom' (or 'geometry') must contain the geometry objects
     gdf_lines = gpd.GeoDataFrame(n.lines, geometry='geom', crs=switches.crs)
 
-    # 2. Räumliche Suche: Finde Indizes der Linien, die am nächsten an den Switches liegen
-    # max_distance fängt Rundungsfehler ab (z.B. 0.001 Meter)
-    # 1. Erstelle Punkte, die in der Mitte jeder Schalter-Leitung liegen
     if switches.crs != gdf_lines.crs:
         switches = switches.to_crs(gdf_lines.crs)
 
-    # 2. Erstelle einen winzigen Puffer um die Schalter (z.B. 2cm)
-    # Das macht aus der Linie eine schmale Fläche
+    # 2. create a tiny buffer around the switches (e.g. 2cm)
+    # this turns the line into a narrow polygon
     switch_buffer_m = project_config["thresholds"]["switch_buffer_m"]
     switches_buffered = switches.copy()
     switches_buffered['geometry'] = switches.geometry.buffer(switch_buffer_m)
 
-    # 3. Räumlicher Join: Welche Leitung liegt INNERHALB dieses Puffers?
-    # 'within' stellt sicher, dass die Leitung fast komplett im Puffer liegen muss
+    # 3. spatial join: which line lies WITHIN this buffer?
+    # 'within' ensures the line must lie almost entirely inside the buffer
     matches = gpd.sjoin(
         gpd.GeoDataFrame(n.lines, geometry='geom', crs=switches.crs),
         switches_buffered,
@@ -1152,18 +1160,21 @@ def implement_switches_LV(n, input_path, project_config):
     indices_to_drop = matches.index.unique()
 
     if not indices_to_drop.empty:
-        print(f"Lösche {len(indices_to_drop)} Linien mit Indizes: {indices_to_drop.tolist()}")
+        print(f"Removing {len(indices_to_drop)} lines with indices: {indices_to_drop.tolist()}")
         n.lines = n.lines.drop(indices_to_drop)
     else:
-        print("Keine passenden Geometrien zum Löschen gefunden.")
+        print("No matching geometries found to remove.")
 
     n = fix_grid_infrastructure(n, project_config)
     return n
 
 
 def assign_lv_grid_ids(n, project_config):
+    """Assign each LV bus an lv_grid_id identifying which LV/MV transformer
+    it is fed from, via a multi-source BFS over the LV line graph starting
+    from all transformers at once."""
 
-    # --- 1. LV-Busse & Trafos (identisch zu vorher) ---
+    # --- 1. LV buses & transformers ---
     lv_v_nom = project_config["project"]["voltage_levels"]["lv"]
     lv_buses = set(n.buses[n.buses.v_nom == lv_v_nom].index)
 
@@ -1179,7 +1190,7 @@ def assign_lv_grid_ids(n, project_config):
     }
     trafo_to_grid_id = {tid: i + 1 for i, tid in enumerate(trafo_lv_bus)}
 
-    # --- 2. LV-Graph aufbauen ---
+    # --- 2. build the LV graph ---
     lv_lines = n.lines[
         n.lines.bus0.isin(lv_buses) &
         n.lines.bus1.isin(lv_buses)
@@ -1189,8 +1200,8 @@ def assign_lv_grid_ids(n, project_config):
     for _, line in lv_lines.iterrows():
         G.add_edge(line.bus0, line.bus1)
 
-    # --- 3. Multi-Source-BFS: alle Trafos gleichzeitig als Startpunkte ---
-    # Jeder Bus wird beim ERSTEN Erreichen einem Trafo zugeordnet → nächster Trafo
+    # --- 3. multi-source BFS: all transformers as starting points at once ---
+    # each bus is assigned to a transformer the FIRST time it's reached -> nearest transformer
     bus_to_grid_id = {}
     queue = deque()
 
@@ -1203,17 +1214,21 @@ def assign_lv_grid_ids(n, project_config):
     while queue:
         current_bus, grid_id = queue.popleft()
         for neighbor in G.neighbors(current_bus):
-            if neighbor not in bus_to_grid_id:          # noch nicht besucht
+            if neighbor not in bus_to_grid_id:          # not yet visited
                 bus_to_grid_id[neighbor] = grid_id
                 queue.append((neighbor, grid_id))
 
-    # --- 4. Ins Netzwerk schreiben ---
+    # --- 4. write to the network ---
     n.buses["lv_grid_id"] = n.buses.index.map(bus_to_grid_id)
 
     return n
 
 
 def fix_grid_infrastructure(n, project_config):
+    """Clean up the raw network topology so it's a valid, solvable PyPSA
+    network: add a slack generator, drop loop lines, unconnected buses,
+    all but the largest connected subnetwork, and MV/LV transformers
+    that ended up without an MV line connection."""
 
     ### Add slack Generator and dummy MV-grid (for test-case) for working lopf
     if project_config["project"]["is_test_model"]:
@@ -1247,7 +1262,7 @@ def fix_grid_infrastructure(n, project_config):
         print("⚠️ This lines will be deleted.")
         n.remove("Line", loop_lines.index.tolist())
 
-    # Lösche unverbundene Busse (ohne Subnetz)
+    # remove unconnected buses (without a subnetwork)
     line_buses = pd.concat([n.lines.bus0, n.lines.bus1]).unique()
     connected_transformers = n.transformers[
         n.transformers.bus0.isin(line_buses)
@@ -1268,7 +1283,7 @@ def fix_grid_infrastructure(n, project_config):
         print("⚠️ Buses and according components will be deleted.")
         n.remove("Bus", uncon_buses.index.tolist())
 
-        # Lösche alle Komponenten, die an unverbundenen Bussen hängen
+        # remove all components attached to unconnected buses
         for comp in [
             "Generator",
             "Transformer",
@@ -1288,7 +1303,7 @@ def fix_grid_infrastructure(n, project_config):
             to_remove = df[mask].index.tolist()
 
             if to_remove:
-                # Finde die betroffenen Busse
+                # find the affected buses
                 if comp in ["Transformer", "Link"]:
                     buses_used = (
                         pd.concat(
@@ -1312,43 +1327,39 @@ def fix_grid_infrastructure(n, project_config):
     G = n.graph()
     components = list(nx.connected_components(G))
       
-    # Die Komponenten nach Größe sortieren (absteigend)
-    # Das größte Subnetz steht danach an Index 0
+    # sort components by size (descending)
+    # the largest subnetwork then ends up at index 0
     components = sorted(components, key=len, reverse=True)
-      
+
     if components:
         main_component = components[0]
-        subnetworks_to_remove = components[1:] # Alles außer dem Größten
-      
+        subnetworks_to_remove = components[1:] # everything except the largest
+
         print(f"✅ Main Subnetwork found: {len(main_component)} Buses.")
-          
-        # 3. Alle kleineren Subnetze entfernen
+
+        # remove all smaller subnetworks
         for comp in subnetworks_to_remove:
             print(f"⚠️ Removing subnetwork with {len(comp)} Buses...")
-              
-            # In PyPSA reicht es oft, die Busse zu löschen; 
-            # n.mremove entfernt effizienter als eine Schleife
-              
-            # Erst Busse löschen
+
+            # removing the buses first, then all associated components
             n.remove("Bus", list(comp))
-              
-            # Dann alle assoziierten Komponenten
+
             for c in n.iterate_components(list(n.all_components - {"Bus"})):
                   df = c.df
                   if "bus" in df.columns:
                       to_remove = df[df.bus.isin(comp)].index
-                  elif "bus0" in df.columns: # Für Lines, Links, Transformers
+                  elif "bus0" in df.columns: # for lines, links, transformers
                       to_remove = df[df.bus0.isin(comp) | df.bus1.isin(comp)].index
                   else:
                       continue
-                      
+
                   if not to_remove.empty:
                       n.remove(c.name, to_remove.tolist())
     else:
           print("❌ No components found in network.")
-    
+
     # -------------------------------------------------------------------------
-    # Lösche Transformatoren ohne MV-Leitungsanbindung (inkl. Busse & Leitungen)
+    # remove transformers without an MV line connection (incl. their buses & lines)
     # ------------------------------------------------------------------------
     mv_lines = n.lines[n.lines["comp_type"] == "mv_line"]
     mv_line_buses = set(mv_lines["bus0"].tolist() + mv_lines["bus1"].tolist())
@@ -1359,11 +1370,11 @@ def fix_grid_infrastructure(n, project_config):
     ]
 
     if not isolated_trafos.empty:
-        # Busse die nur an diesen isolierten Trafos hängen
+        # buses attached only to these isolated transformers
         isolated_trafo_buses = set(
             isolated_trafos["bus0"].tolist() + isolated_trafos["bus1"].tolist()
         )
-        # Leitungen die an diesen Bussen hängen
+        # lines attached to these buses
         isolated_lines = n.lines[
             n.lines["bus0"].isin(isolated_trafo_buses) |
             n.lines["bus1"].isin(isolated_trafo_buses)
@@ -1389,6 +1400,7 @@ def fix_grid_infrastructure(n, project_config):
 
 
 def export_shape_files_from_network(n, output_path, crs):
+      """Export the final network's buses and lines as shapefiles for inspection in a GIS tool."""
       buses_path = os.path.join(output_path, "buses_final.shp")
       buses = n.buses.copy()
 
@@ -1427,6 +1439,11 @@ def create_pypsa_network(
     census_data,
     project_config,
 ):
+    """Build a complete PyPSA network for one project from its GIS grid
+    shapefiles: reads the shapefiles, snaps/splits/imports the topology,
+    applies switches and infrastructure fixes, and assigns LV grid IDs.
+    This is the main entry point of the network-building module, called
+    from appl.py."""
     print("=== [1/10] Initializing PyPSA network ===")
     crs = project_config["project"]["crs"]
     epsg_code = int(str(crs).split(":")[-1])
