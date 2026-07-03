@@ -119,24 +119,24 @@ def add_heat_loads_to_network(n, project_config):
         (mapped_buses["demand"].notna())
     ]
 
-    # Filter buses with Heatpump 
+    # Filter buses with heat pump
     bus_with_hp = mapped_buses[mapped_buses.HP == 1].copy()
-    
+
     # scenario target for the configured project/scenario
     target_count = project_config["scenario_targets"]["heat_pumps"]
     current_count = len(bus_with_hp)
 
     if target_count < current_count:
-        # Fall 1: Weniger HPs -> Zufällig aus dem HP=1 Set wählen
+        # case 1: fewer HPs -> randomly pick from the HP=1 set
         logging.info(f"Reduce HPs from {current_count} to {target_count}")
         bus_with_cell = bus_with_hp.sample(n=target_count, random_state=42)
-        
+
     elif target_count > current_count:
-        # Fall 2: Mehr HPs -> HP=1 behalten + Rest aus anderen house_connections auffüllen
+        # case 2: more HPs -> keep HP=1 buses + fill the rest from other house connections
         logging.info(f"Increase HPs from {current_count} to {target_count}")
         n_extra = target_count - current_count
-        
-        # Verfügbare Busse sind alle house_connection, die NOCH KEINE HP haben
+
+        # available buses are all house connections that don't have a HP yet
         available_buses = mapped_buses.loc[~mapped_buses.index.isin(bus_with_hp.index)]
         extra_samples = available_buses.sample(n=n_extra, replace=False, random_state=42)
             
@@ -149,15 +149,15 @@ def add_heat_loads_to_network(n, project_config):
         0.0, index=snapshots, columns=bus_with_cell.index
     )
 
-    #source : "Branchenstudie 2023: Marktentwicklung – Prognose – Handlungsempfehlungen" - Bundesverband Wärmepumpe (BWP) e. V, 2023 
+    #source : "Branchenstudie 2023: Marktentwicklung – Prognose – Handlungsempfehlungen" - Bundesverband Wärmepumpe (BWP) e. V, 2023
     # prognosed avg. heatpump capacity 10 kW for 2030
-    HP_CAPACITY_MIN_MW = 0.010   # thermische Lesitung
-    HP_CAPACITY_MAX_MW = 0.015   # thermisceh Leistung
-      
-    # Reproduzierbarer RNG – Seed einmal pro Simulation setzen
+    HP_CAPACITY_MIN_MW = 0.010   # thermal capacity
+    HP_CAPACITY_MAX_MW = 0.015   # thermal capacity
+
+    # reproducible RNG - set the seed once per simulation
     rng = np.random.default_rng(seed=42)
-      
-    # --- Profil-Schleife ---
+
+    # --- profile loop ---
     used_profiles = {}
     scale_up_count = 0
     scale_down_count = 0
@@ -165,7 +165,7 @@ def add_heat_loads_to_network(n, project_config):
         try:
             bus_id = bus_idx
         except IndexError:
-            print(f"IndexError: Kein bus_id für Spalte {bus_idx}; überspringe.")
+            print(f"IndexError: no bus_id for column {bus_idx}; skipping.")
             continue
       
         zensus_id   = row["zensus_pop"]
@@ -239,6 +239,8 @@ def add_heat_loads_to_network(n, project_config):
 
 
 def calculate_cop_air(t_source, t_sink=55):
+    """Coefficient of performance of an air-source heat pump, as a function
+    of the source (air) and sink (e.g. heating circuit) temperature."""
     delta_t = t_sink - t_source
     return (
         6.81 - 0.121 * delta_t + 0.000630 * delta_t**2

@@ -8,13 +8,16 @@ import pandas as pd
 
 
 def download_osm_industrial_areas(region_nuts3):
+    """Download OSM "landuse=industrial" areas for a NUTS3 region, clip them
+    to the project's federal state, and filter out non-industrial company
+    types (power plants, utilities, waste/water treatment, ...)."""
 
     tags = {"landuse": "industrial"}
-    
+
     # extract data
     gdf = ox.features_from_place(region_nuts3, tags)
     gdf = gdf.to_crs("EPSG:32632")
-    gdf["area_ha"] = gdf.geometry.area / 10_000  # Fläche in Hektar
+    gdf["area_ha"] = gdf.geometry.area / 10_000  # area in hectares
 
     #filter out data for defined region
     # Currently Schleswig-Holstein specific: a Stadtwerk outside SH must
@@ -32,6 +35,7 @@ def download_osm_industrial_areas(region_nuts3):
     ]
 
     def is_blacklisted(name):
+        """Check whether `name` contains any blacklisted non-industrial keyword."""
         if pd.isna(name):
             return False
         name = name.lower()
@@ -44,7 +48,10 @@ def download_osm_industrial_areas(region_nuts3):
     
     
 def distribute_ind_demand(path_to_MV_district, region_nuts3):
-    
+    """Distribute demand_regio's industrial electricity demand (per sector,
+    "wz") evenly by area across all OSM industrial buildings in the MV
+    grid district."""
+
     #load demand_regio data
     demand_regio_ind = pd.read_csv('data/data_bundle/demand_regio_industrial.csv')
     region_name = region_nuts3.split(",")[0]
@@ -81,7 +88,9 @@ def distribute_ind_demand(path_to_MV_district, region_nuts3):
 
 
 def calc_load_curves_from_osm_demand(path_to_MV_district, region_nuts3):
-    
+    """Build an hourly load timeseries for each industrial building from its
+    annual demand and its sector's standard load curve."""
+
     ind_demand_per_building = distribute_ind_demand(path_to_MV_district, region_nuts3)
    
     load_profiles_ind = pd.read_hdf('data/data_bundle/load_profiles_ind.hdf', index_col=0)    

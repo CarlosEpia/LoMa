@@ -9,25 +9,22 @@ from shapely.geometry import Point
 
 
 def create_profile_pool_from_df(profil_type, profiles_df, limit=1):
-    """
-    
-    """
-    
-    cols = [col for col in profiles_df.columns if col.startswith(profil_type)]    
+    """Pick a random household load profile of the given type from the profile pool."""
+
+    cols = [col for col in profiles_df.columns if col.startswith(profil_type)]
     if not cols:
-        raise ValueError(f"Kein Profil vom Typ {profil_type} gefunden.")
-    
-    # Choose random profil
+        raise ValueError(f"No profile of type {profil_type} found.")
+
+    # choose random profile
     chosen_col = np.random.choice(cols)
     profile = profiles_df[chosen_col]
-    
+
     return profile
 
 def distribute_household_demand(n, profile_dist, random_seed=42):
-    
-    """
-    
-    """
+    """Assign each household at a house-connection bus a random load
+    profile, drawn according to the household-type probabilities of the
+    nearest profile-distribution cell."""
     #define seed
     np.random.seed(random_seed)
     
@@ -93,19 +90,20 @@ def distribute_household_demand(n, profile_dist, random_seed=42):
     return n
 
 def define_slp_as_load_profile(n):
+    """Replace each load's individual time series with the standard load
+    profile (SLP), shaped to preserve each load's original annual sum."""
     hourly_profile = pd.read_csv("data/data_bundle/SLP_hourly.csv", index_col=0)
     slp_normed = hourly_profile/hourly_profile.sum()
-    slp = slp_normed["load"]  # Series statt DataFrame
-    slp.index = n.loads_t.p_set.index 
+    slp = slp_normed["load"]  # Series, not DataFrame
+    slp.index = n.loads_t.p_set.index
     slp_shifted = pd.Series(np.roll(slp.values, 24), index=slp.index)
-    
+
     annual_sums = n.loads_t.p_set.sum()
     new_loads = slp_shifted.values.reshape(-1, 1) * annual_sums.values.reshape(1, -1)
 
-    # Schritt 4: neues DataFrame erstellen
     n.loads_t.p_set = pd.DataFrame(new_loads, index=slp.index, columns=n.loads_t.p_set.columns)
-    
-    return n 
+
+    return n
 
 
 

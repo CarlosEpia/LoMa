@@ -76,6 +76,9 @@ def parse_bus_numbers(hn_entry):
 
 
 def count_households_per_bus_input_file(buses, path, threshold=80):
+    """Count households per house-connection bus from a manual
+    street/house-number input file, using fuzzy street-name matching and a
+    nearest-house-number fallback for addresses that don't match exactly."""
     # load households
     q_households = pd.read_csv(path)
 
@@ -103,13 +106,13 @@ def count_households_per_bus_input_file(buses, path, threshold=80):
             street, street_choices, scorer=fuzz.ratio
         )
         if score < threshold:
-            print(street, "übersprungen")
-            continue  # kein aktzeptables Match
+            print(street, "skipped")
+            continue  # no acceptable match
 
         # filter buses on that street
         street_buses = buses[mask_house_conn & (buses["Straße"] == best_match)]
         if street_buses.empty:
-            print("Adresse:", street, num, letter, "übersprungen")
+            print("Address:", street, num, letter, "skipped")
             continue
 
         # 1) exact match (number + letter)
@@ -156,6 +159,7 @@ def count_households_per_bus_input_file(buses, path, threshold=80):
             )
 
         def min_diff(nums):
+            """Smallest absolute difference between `num` and any parsed house number in `nums`."""
             return min(abs(n - num) for n, _ in nums)
 
         same_side = same_side.assign(
@@ -174,6 +178,9 @@ def count_households_per_bus_input_file(buses, path, threshold=80):
 
 
 def count_households_per_bus_census_data(buses, census_data):
+    """Count households per house-connection bus by joining each bus to its
+    nearest census cell and splitting that cell's household count evenly
+    across all buses assigned to it."""
     # create GeoDataFrames
     census_data = gpd.GeoDataFrame(
         census_data,
@@ -204,7 +211,7 @@ def count_households_per_bus_census_data(buses, census_data):
         rest = households_in_cell % n_buses
 
         counts = np.full(n_buses, base, dtype=int)
-        counts[: int(rest)] += 1  # Rest gleichmäßig verteilen
+        counts[: int(rest)] += 1  # distribute the remainder evenly
 
         house_buses.loc[group, "household_count"] = counts
 

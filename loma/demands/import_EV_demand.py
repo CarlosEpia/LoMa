@@ -60,15 +60,18 @@ def import_charging_points(
     MV_THRESHOLD_KW = 100.0      # kW
 
     def _normalize_text(s: str) -> str:
+        """Normalize a free-text charging point description for parsing (lowercase, unified separators/whitespace)."""
         s = s.strip().lower()
         s = s.replace(",", ".").replace("×", "x").replace("*", "x")
         s = re.sub(r"\s+", " ", s)
         return s
 
     def _clamp_kw(p: float) -> float:
+        """Round very small parsed power values up to the standard 11 kW charging point."""
         return 11.0 if p < 3.0 else p
 
     def _dedupe_same_value(loads: list, tol: float = 1e-9) -> list:
+        """Collapse a list of identical load values (within tolerance) to a single entry."""
         if len(loads) <= 1:
             return loads
 
@@ -193,6 +196,7 @@ def import_charging_points(
         return [11.0], "FALLBACK"
 
     def build_gdf_and_tree(bus_df):
+        """Build a GeoDataFrame and matching KDTree from a bus DataFrame, for nearest-bus lookups."""
         gdf = gpd.GeoDataFrame(
             bus_df,
             geometry=bus_df["geom"],

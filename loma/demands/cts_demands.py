@@ -10,6 +10,9 @@ import numpy as np
 
 
 def load_cts_demand_per_building(shape):
+    """Load the bundled CTS (commercial/trade/services) building floor-area
+    shares within `shape` and scale each building's bus-level demand profile
+    by its share."""
     shape.to_crs(3035, inplace=True)
     building_share = gpd.read_file(
         "data/data_bundle/building_share", mask=shape
@@ -261,6 +264,7 @@ def assign_cts_demand_to_buses(
 
 
 def inser_cts_demand_per_building(network, shape_path, target_demand=31):
+    """Load CTS demand per building within `shape_path` and insert it into the network."""
     shape = gpd.read_file(shape_path)
     cts_demands = load_cts_demand_per_building(shape)
     network = assign_cts_demand_to_buses(network, cts_demands, target_demand)
