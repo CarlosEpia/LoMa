@@ -11,6 +11,7 @@ import logging
 def insert_pv_rooftop_and_battery(
     network, shape_path, pv_rooftop_path, pv_feedin_path, batteries_path, project_config
 ):
+    """Insert solar rooftop generators and home battery storage units at house-connection buses within `shape_path`."""
     crs = project_config["project"]["crs"]
     shape = gpd.read_file(shape_path).to_crs(crs)
     buses = network.buses.copy()
@@ -23,6 +24,9 @@ def insert_pv_rooftop_and_battery(
 
 
 def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, project_config):
+    """Insert solar rooftop generators at the nearest house-connection bus,
+    scaled down to the project's pv_rooftop_mwp target if needed, with
+    feed-in profiles from the weather-cell-based feed-in data."""
     crs = project_config["project"]["crs"]
     solar = gpd.read_file(pv_rooftop_path).to_crs(crs)
     solar = gpd.clip(solar, shape)
@@ -45,11 +49,11 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, pr
     
     if current_p_nom > target_p_nom:
         logging.info(f"Reducing solar rooftop capacity from {current_p_nom:.2f} MWp to {target_p_nom:.2f} MWp")
-        
-        # Datensatz zufällig mischen (reproduzierbar durch random_state)
-        solar = solar.sample(frac=1, random_state=42) 
-        
-        # Kumulierte Summe bilden und filtern
+
+        # shuffle the dataset randomly (reproducible via random_state)
+        solar = solar.sample(frac=1, random_state=42)
+
+        # build the cumulative sum and filter by it
         solar["cumsum_p_nom"] = solar["capacity"].cumsum()
         solar = solar[solar["cumsum_p_nom"] <= target_p_nom].copy()
         
@@ -63,7 +67,7 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, pr
     solar["carrier"] = "solar_rooftop"
     solar["efficiency"] = 0.9
 
-    for name, row in solar.iterrows():  # Später eingefügt,weiß nicht ob das richtig ist
+    for name, row in solar.iterrows():
         network.add(
             "Generator",
             name=name,
@@ -92,6 +96,8 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, pr
 
 
 def insert_home_battery(network, shape, buses, batteries_path, project_config):
+    """Insert home battery storage units at buses that already have a solar
+    rooftop generator, scaled to the project's home_battery_mw target."""
     crs = project_config["project"]["crs"]
     bat = gpd.read_file(batteries_path).to_crs(crs)
     bat = gpd.clip(bat, shape)
@@ -121,11 +127,11 @@ def insert_home_battery(network, shape, buses, batteries_path, project_config):
     
     if current_p_nom > target_p_nom:
         logging.info(f"Reducing home-batteries capacity from {current_p_nom:.2f} MW to {target_p_nom:.2f} MW")
-        
-        # Datensatz zufällig mischen (reproduzierbar durch random_state)
-        bat = bat.sample(frac=1, random_state=42) 
-        
-        # Kumulierte Summe bilden und filtern
+
+        # shuffle the dataset randomly (reproducible via random_state)
+        bat = bat.sample(frac=1, random_state=42)
+
+        # build the cumulative sum and filter by it
         bat["cumsum_p_nom"] = bat["p_nom"].cumsum()
         bat = bat[bat["cumsum_p_nom"] <= target_p_nom].copy()
         

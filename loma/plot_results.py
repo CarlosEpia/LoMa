@@ -7,6 +7,8 @@ import geopandas as gpd
 
 
 def plot_results(n):
+    """Plot line loading and §14a heat pump generator output over time, and
+    export the network's bus/line geometries as GeoJSON."""
     n.lines["lines_exp"] = n.lines["s_nom_opt"] - n.lines["s_nom"]
     lines_exp = n.lines["lines_exp"][n.lines["lines_exp"] > 0.001]
     lines_exp_t = n.lines_t["p0"].loc[:, lines_exp.index]

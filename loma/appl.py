@@ -80,7 +80,8 @@ else:
         project_config,
     )
     
-    # avoid meshes in the grid
+    # optional: remove LV meshes so the grid is strictly radial (disabled by
+    # default - only needed if the source shapefiles contain closed loops)
     #n = avoid_meshes_in_network(n)
 
     # insert solar_rooftop and home_batteries
@@ -107,7 +108,7 @@ else:
         n, args["path_to_shapefile_MV_grid"], args["nuts3_focus_region"]
     )
 
-    # insert_heat_loas_for_heat_pump_location
+    # insert heat loads for heat pump locations
     n = add_heat_loads_to_network(n, project_config)
 
 # insert EV_loads
@@ -117,15 +118,17 @@ n = import_charging_points(n, args["path_to_shapefiles_grid"], project_config)
 n.lines.s_nom_extendable = False
 n.transformers.s_nom_extendable = False
 
-if project_config["project"]["is_test_model"]:  ##delete cts loads for test models
-      loads_to_remove = n.loads.index[n.loads.index.str.contains("CTS")]  #
+if project_config["project"]["is_test_model"]:  # delete CTS loads for test models
+      loads_to_remove = n.loads.index[n.loads.index.str.contains("CTS")]
       n.remove("Load", loads_to_remove)
 
 
 n.consistency_check()
 
-print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-# Optimize
+print(f"Start optimization: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+# optional: solve the network with a linear optimal power flow (disabled by
+# default - building the network is the main purpose of this script; enable
+# this to actually run an LOPF on it)
 # n.optimize(
 #     snapshots=n.snapshots[0:1],
 #     solver_name="highs",
@@ -133,8 +136,7 @@ print(f"Start Optimierung: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 #         "threads": 4,
 #     },
 # )
-print(f"Ende Optimierung:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"End optimization:  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-#n.export_to_csv_folder("results/MGB_model_pypsa")
 n.export_to_csv_folder("results/Whole_Husum_final_statusQuo_LV_ids")
 

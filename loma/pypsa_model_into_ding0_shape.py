@@ -94,6 +94,8 @@ def add_dummy_mv_grid(n):
 
 
 def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
+    """Reshape a PyPSA network's buses/lines/transformers into the column
+    layout ding0/eDisGo expects and export them as CSVs to `export_path`."""
 
     ##buses
     buses = pd.DataFrame(index=n.buses.index)
@@ -279,6 +281,7 @@ def adjust_network_shape(n, export_path, mv_grid_id=35725, lv_grid_id=1):
 
 
 def export_timeseries(n, export_path):
+    """Export load, generator p_max_pu, and heat pump COP timeseries as CSVs for eDisGo."""
     export_path = os.path.join(export_path, "timeseries")
     os.makedirs(export_path, exist_ok=True)
 
@@ -328,5 +331,6 @@ def export_timeseries(n, export_path):
 
 
 def prepare_ding0_shape_export(n, export_path):
+    """Export a PyPSA network's topology and timeseries in ding0/eDisGo-compatible CSV format."""
     adjust_network_shape(n, export_path)
     export_timeseries(n, export_path)

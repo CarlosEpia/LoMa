@@ -4,6 +4,7 @@
 
 
 def load_reduction_constraint_14a(n, snapshots):
+    """Limit each §14a flexibility generator to at most 2 hours of use per day."""
     # relevant generators for load reduction
     gens_14a = n.generators.index[n.generators.carrier == "14a"]
 
@@ -33,9 +34,9 @@ def load_reduction_constraint_14a(n, snapshots):
                 name=f"link_on_{gen}_{t}"
             )
         
-        # Sliding Window: max. 2h on per day
+        # sliding window: max. 2h on per day
         for day in snapshots.to_series().dt.floor("D").unique():
-            # Liste der Indizes (Positionen) für diesen Tag
+            # list of indices (positions) for this day
             window_idx = [i for i, t in enumerate(snapshots) if t.floor("D") == day]
             
             n.model.add_constraints(
