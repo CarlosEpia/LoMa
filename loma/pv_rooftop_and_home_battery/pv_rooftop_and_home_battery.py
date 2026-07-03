@@ -5,20 +5,22 @@ import logging
 
 
 def insert_pv_rooftop_and_battery(
-    network, shape_path, pv_rooftop_path, pv_feedin_path, batteries_path, scenario
+    network, shape_path, pv_rooftop_path, pv_feedin_path, batteries_path, project_config
 ):
-    shape = gpd.read_file(shape_path).to_crs(32632)
+    crs = project_config["project"]["crs"]
+    shape = gpd.read_file(shape_path).to_crs(crs)
     buses = network.buses.copy()
     buses = buses[buses["comp_type"] == "house_connection"]
-    buses = gpd.GeoDataFrame(buses, geometry="geom", crs=32632)
-    network = insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, scenario)
-    network = insert_home_battery(network, shape, buses, batteries_path, scenario)
+    buses = gpd.GeoDataFrame(buses, geometry="geom", crs=crs)
+    network = insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, project_config)
+    network = insert_home_battery(network, shape, buses, batteries_path, project_config)
 
     return network
 
 
-def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, scenario):
-    solar = gpd.read_file(pv_rooftop_path).to_crs(32632)
+def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, project_config):
+    crs = project_config["project"]["crs"]
+    solar = gpd.read_file(pv_rooftop_path).to_crs(crs)
     solar = gpd.clip(solar, shape)
 
     buses.index.rename("bus", inplace=True)
@@ -32,20 +34,9 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, sc
     )
     solar = solar[solar["distance"] <= 50]
     
-    #scale down amount of pvs according to scenario values
-    target_capacities = {
-        "Husum_statusQuo": 26.1,  # MWp
-        "Husum_2035": 32.0,
-    } 
-    if scenario not in target_capacities:
-        logging.warning(
-            f"Szenario '{scenario}' not found! "
-            f"Use whole pv-capacity of egon2035 data ({solar['capacity'].sum():.2f} MWp)."
-        )
-        target_p_nom = solar["capacity"].sum()
-    else:
-        target_p_nom = target_capacities[scenario]
-        
+    #scale down amount of pvs according to scenario target
+    target_p_nom = project_config["scenario_targets"]["pv_rooftop_mwp"]
+
     current_p_nom = solar["capacity"].sum()
     
     if current_p_nom > target_p_nom:
@@ -96,8 +87,9 @@ def insert_pv_rooftop(network, shape, buses, pv_rooftop_path, pv_feedin_path, sc
     return network
 
 
-def insert_home_battery(network, shape, buses, batteries_path, scenario):
-    bat = gpd.read_file(batteries_path).to_crs(32632)
+def insert_home_battery(network, shape, buses, batteries_path, project_config):
+    crs = project_config["project"]["crs"]
+    bat = gpd.read_file(batteries_path).to_crs(crs)
     bat = gpd.clip(bat, shape)
     bat = gpd.sjoin_nearest(bat, buses, "left", distance_col="distance")
 
@@ -118,21 +110,9 @@ def insert_home_battery(network, shape, buses, batteries_path, scenario):
         f"{bat_before_filter} batteries -> {len(bat)} batteries"
     )
 
-    #scale down amount of pvs according to scenario values
-    target_capacities = {
-        "Husum_statusQuo": 2.6, #MW
-        "Husum_2035": 7.5,
-    } 
+    #scale down amount of batteries according to scenario target
+    target_p_nom = project_config["scenario_targets"]["home_battery_mw"]
 
-    if scenario not in target_capacities:
-        logging.warning(
-            f"Szenario '{scenario}' not found! "
-            f"Use whole home-batteries capacity of egon2035 data ({bat['p_nom'].sum():.2f} MWp)."
-        )
-        target_p_nom = bat["capacity"].sum()
-    else:
-        target_p_nom = target_capacities[scenario]
-     
     current_p_nom = bat["p_nom"].sum()
     
     if current_p_nom > target_p_nom:

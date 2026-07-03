@@ -46,7 +46,6 @@ project_config = load_project_config(PROJECT_CONFIG_PATH)
 
 args = {
     "import_network_structure": False,  # "/home/carlos/LoMa/network_structures/MGB",
-    "scenario": project_config["project"]["scenario"],
     "path_to_shapefiles_grid": project_config["paths"]["shapefiles_grid"],
     "path_to_shapefile_MV_grid": project_config["paths"]["mv_grid_boundary"],
     "nuts3_focus_region": project_config["nuts3_focus_region"],
@@ -108,7 +107,7 @@ else:
         args["pv_rooftop_path"],
         args["pv_feedin_path"],
         args["batteries_path"],
-        args["scenario"]
+        project_config,
     )
 
     # allocate profiles to buses
