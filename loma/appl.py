@@ -118,7 +118,7 @@ n = import_charging_points(n, args["path_to_shapefiles_grid"], project_config)
 n.lines.s_nom_extendable = False
 n.transformers.s_nom_extendable = False
 
-if project_config["project"]["is_test_model"]:  # delete CTS loads for test models
+if project_config["project"]["is_test_model"]:  # delete CTS loads for test models, manual fix for our test_case, just use if necessary
       loads_to_remove = n.loads.index[n.loads.index.str.contains("CTS")]
       n.remove("Load", loads_to_remove)
 
