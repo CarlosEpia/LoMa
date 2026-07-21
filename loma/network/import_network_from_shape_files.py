@@ -1137,11 +1137,15 @@ def implement_switches_LV(n, input_path, project_config):
         return n
 
     # 1. temporarily turn n.lines into a GeoDataFrame
-    # important: 'geom' (or 'geometry') must contain the geometry objects
-    gdf_lines = gpd.GeoDataFrame(n.lines, geometry='geom', crs=switches.crs)
+    # important: 'geom' (or 'geometry') must contain the geometry objects.
+    # n.lines' geometries are already in the project's target CRS (set in
+    # create_pypsa_network), so that - not the switches file's own CRS - is
+    # the reference to reproject the switches file to.
+    target_crs = project_config["project"]["crs"]
+    gdf_lines = gpd.GeoDataFrame(n.lines, geometry='geom', crs=target_crs)
 
-    if switches.crs != gdf_lines.crs:
-        switches = switches.to_crs(gdf_lines.crs)
+    if switches.crs != target_crs:
+        switches = switches.to_crs(target_crs)
 
     # 2. create a tiny buffer around the switches (e.g. 2cm)
     # this turns the line into a narrow polygon
@@ -1152,7 +1156,7 @@ def implement_switches_LV(n, input_path, project_config):
     # 3. spatial join: which line lies WITHIN this buffer?
     # 'within' ensures the line must lie almost entirely inside the buffer
     matches = gpd.sjoin(
-        gpd.GeoDataFrame(n.lines, geometry='geom', crs=switches.crs),
+        gdf_lines,
         switches_buffered,
         predicate='within',
         how='inner'
