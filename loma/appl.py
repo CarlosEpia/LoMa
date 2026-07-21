@@ -109,7 +109,7 @@ else:
     )
 
     # insert heat loads for heat pump locations
-    n = add_heat_loads_to_network(n, project_config)
+    n = add_heat_loads_to_network(n, project_config, args["path_to_shapefile_MV_grid"])
 
 # insert EV_loads
 n = import_charging_points(n, args["path_to_shapefiles_grid"], project_config)

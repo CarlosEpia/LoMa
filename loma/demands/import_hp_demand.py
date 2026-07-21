@@ -8,21 +8,37 @@ import numpy as np
 import logging
 
 
-def check_heat_pumps(n, hp_shapefile_path):
+def check_heat_pumps(n, hp_shapefile_path, mv_grid_shape_path):
     """
-    Assigns Heat Pumps to buses based on a heat pump location shapefile.
+    Assigns Heat Pumps to buses based on heat pump locations read from
+    `hp_shapefile_path` (e.g. a region-wide dataset), filtered to the
+    project's MV grid boundary (`mv_grid_shape_path`).
     """
     con_buses = n.buses[n.buses.comp_type == "house_connection"].copy()
     con_buses["HP"] = 0  # Initialize HP column
     con_buses["hp_capacity"] = 0.0
 
-    print(f"Heat_pumps are distributed according to shapefile '{hp_shapefile_path}'.")
-    shp_path = hp_shapefile_path
+    if not os.path.isfile(hp_shapefile_path):
+        raise FileNotFoundError(f"No file found like:{hp_shapefile_path}")
 
-    if not os.path.isfile(shp_path):
-        raise FileNotFoundError(f"No file found like:{shp_path}")
+    # Reproject the MV grid boundary to the heat pump dataset's CRS before
+    # using it as a read mask (mirrors the `mask=` filtering pattern used for
+    # the bundled CTS dataset in cts_demands.py).
+    mv_grid_shape = gpd.read_file(mv_grid_shape_path)
+    hp_crs = gpd.read_file(hp_shapefile_path, rows=1).crs
+    mv_grid_geometry = mv_grid_shape.to_crs(hp_crs).union_all()
 
-    fallback_hp = gpd.read_file(shp_path)
+    print(
+        f"Heat pumps are filtered from '{hp_shapefile_path}' "
+        f"using MV grid boundary '{mv_grid_shape_path}'."
+    )
+
+    fallback_hp = gpd.read_file(hp_shapefile_path, mask=mv_grid_geometry)
+    if fallback_hp.empty:
+        raise ValueError(
+            f"No heat pump locations found in '{hp_shapefile_path}' "
+            f"within the MV grid boundary '{mv_grid_shape_path}'."
+        )
     fallback_hp = fallback_hp.rename(
         columns={"building_i": "building_id", "hp_capacit": "hp_capacity"}
     )
@@ -57,7 +73,7 @@ def check_heat_pumps(n, hp_shapefile_path):
     return n
 
 
-def add_heat_loads_to_network(n, project_config):
+def add_heat_loads_to_network(n, project_config, mv_grid_shape_path):
     """
     Adds heat loads to a PyPSA network if bus.HP == 1.
     Load profiles are calculated based on census cells, daily profiles,
@@ -67,13 +83,21 @@ def add_heat_loads_to_network(n, project_config):
     ----------
     n : pypsa.Network
         The PyPSA network with buses (must contain the column 'HP').
+    project_config : dict
+        Loaded project config.
+    mv_grid_shape_path : str
+        Path to the project's MV grid boundary shapefile, used to filter
+        `project_config["paths"]["heat_pump_shapefile"]` (a region-wide
+        heat pump dataset) down to the project's area.
 
     Returns
     -------
     pypsa.Network
         Network with additional loads and corresponding p_set time series.
     """
-    n = check_heat_pumps(n, project_config["paths"]["heat_pump_shapefile"])
+    n = check_heat_pumps(
+        n, project_config["paths"]["heat_pump_shapefile"], mv_grid_shape_path
+    )
     # load input-data
     census_cells = gpd.read_file("data/data_bundle/Census_cells_SH.shp")
     daily_profiles = pd.read_hdf("data/data_bundle/heat_daily_profiles.hdf")

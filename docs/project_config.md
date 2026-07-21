@@ -29,7 +29,9 @@ Ausführungsverzeichnis, nicht im Code-Repository, analog zu `cable_types.yaml`)
 
 - **`paths`**: alle projektspezifischen Dateipfade (Shapefiles, Kabeltypen,
   Wärmepumpen-Shapefile, PV/Batterie-Datensätze etc.), relativ zum
-  Ausführungsverzeichnis.
+  Ausführungsverzeichnis. `heat_pump_shapefile` kann ein regionsweiter
+  Datensatz sein (z. B. SH-weit statt nur für das eigene Projektgebiet
+  vorgefiltert) – siehe Wärmepumpen-Abschnitt unten.
 
 - **`gis_source_files`**: Mapping von logischer Rolle (z. B. `lv_lines`,
   `mv_lv_stations`) auf den tatsächlichen Dateinamen im GIS-Export-Ordner.
@@ -77,6 +79,13 @@ vollständig an das eigene Exportformat angepasst werden.
   Grenz-Shapefiles (`schleswig_holstein.shp`, `Nuts3_SH.shp`) zum Zuschneiden
   der bundesweiten Zensus-/OSM-Daten. Für Stadtwerke außerhalb SH müssen diese
   beiden Pfade durch die Grenzen des jeweiligen Bundeslands ersetzt werden.
+- **Wärmepumpen-Standorte**: `demands/import_hp_demand.py` liest den unter
+  `paths.heat_pump_shapefile` konfigurierten Datensatz und filtert ihn zur
+  Laufzeit per `mask=` auf die MV-Grid-Grenze des jeweiligen Projekts
+  (`paths.mv_grid_boundary`). `heat_pump_shapefile` kann dadurch ein
+  regionsweiter Datensatz sein (z. B. SH-weit); eine pro Projekt manuell
+  vorgefilterte Datei ist nicht mehr nötig, da die Filterung jetzt im Code
+  passiert.
 - **Spannungsebenen**: nur LV/MV, keine weiteren Zwischenebenen.
 - **ding0/eDisGo-Export**: `pypsa_model_into_ding0_shape.py` wird aktuell
   nicht aus `appl.py` aufgerufen und ist nicht Teil dieser Generalisierung
